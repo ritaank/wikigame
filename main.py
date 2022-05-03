@@ -25,7 +25,6 @@ TARGET_UPDATE = 10
 def select_action(policy_net, state, steps_done):
     sample = random.random()
     eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * steps_done / EPS_DECAY)
-    steps_done += 1
     if sample > eps_threshold:
         with torch.no_grad():
             # t.max(1) will return largest column value of each row.
@@ -85,12 +84,52 @@ def optimize_model(memory, policy_net, target_net, optimizer):
         param.grad.data.clamp_(-1, 1)
     optimizer.step()
 
+def train(env, memory, policy_net, target_net):
+    num_episodes = 50
+    episode_durations = []
+    steps_done = 0
+    for i_episode in range(num_episodes):
+        # Initialize the environment and state
+        env.reset()
+        state = get_initial_state()
+        for t in count():
+            # Select and perform an action
+            action = select_action(policy_net, state, steps_done)
+            steps_done += 1
+            _, reward, done, _ = env.step(action.item())
+            reward = torch.tensor([reward], device=device)
+
+            # Observe new state
+            if not done:
+                next_state = get_state(action)
+            else:
+                next_state = None
+
+            # Store the transition in memory
+            memory.push(state, action, next_state, reward)
+
+            # Move to the next state
+            state = next_state
+
+            # Perform one step of the optimization (on the policy network)
+            optimize_model()
+            if done:
+                episode_durations.append(t + 1)
+                plot_durations()
+                break
+        # Update the target network, copying all weights and biases in DQN
+        if i_episode % TARGET_UPDATE == 0:
+            target_net.load_state_dict(policy_net.state_dict())
+
+    print('Complete')
+    env.render()
+    env.close()
+    plt.ioff()
+    plt.show()
 
 def main(args):
     pass
 
-
 if __name__ == "__main__":
-
     args = parser.parse_args()
     main(args)
