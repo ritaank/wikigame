@@ -9,6 +9,7 @@ import random
 import math
 import torch
 import torch.nn as nn
+import numpy as np
 
 from replay_utils import Transition, ReplayMemory
 
@@ -21,8 +22,19 @@ EPS_START = 0.9
 EPS_END = 0.05
 EPS_DECAY = 200
 TARGET_UPDATE = 10
+WIKIPEDIA_DIAMETER = 70
 
-def select_action(policy_net, state, steps_done):
+def filter_valid_actions(state, expected_reward_vector):
+    valid_transitions = torch.Tensor([int(neighbor) for neighbor in state.out_neighbors()], dtype=torch.long)
+    updated_reward = torch.full(expected_reward_vector.size(), fill_value=float("-inf"))
+    updated_reward[valid_transitions] = expected_reward_vector[valid_transitions]
+    return updated_reward
+
+def randomly_select_action(state):
+    random_action = np.random.choice([int(neighbor) for neighbor in state.out_neighbors()], 1)
+    return random_action
+
+def select_action(policy_net, state, goal_state, steps_done):
     sample = random.random()
     eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * steps_done / EPS_DECAY)
     if sample > eps_threshold:
@@ -30,7 +42,7 @@ def select_action(policy_net, state, steps_done):
             # t.max(1) will return largest column value of each row.
             # second column on max result is index of where max element was
             # found, so we pick action with the larger expected reward.
-            expected_reward_vector = policy_net(state)
+            expected_reward_vector = evaluate_expected_rewards(policy_net, state, goal_state)
             valid_reward_vector = filter_valid_actions(state, expected_reward_vector)
             max_reward_ix  = valid_reward_vector.max(dim=1)['indices'].view(1,1)
             return max_reward_ix
@@ -90,19 +102,18 @@ def train(env, memory, policy_net, target_net):
     steps_done = 0
     for i_episode in range(num_episodes):
         # Initialize the environment and state
-        env.reset()
-        state = get_initial_state()
-        for t in count():
+        state, goal_state = env.reset()
+        for t in WIKIPEDIA_DIAMETER:
             # Select and perform an action
-            action = select_action(policy_net, state, steps_done)
+            action = select_action(policy_net, state, goal_state, steps_done)
             steps_done += 1
-            _, reward, done, _ = env.step(action.item())
+            _, reward, done, v_dict = env.step(action.item())
+            next_state = v_dict['vertex']
+
             reward = torch.tensor([reward], device=device)
 
             # Observe new state
-            if not done:
-                next_state = get_state(action)
-            else:
+            if done:
                 next_state = None
 
             # Store the transition in memory
