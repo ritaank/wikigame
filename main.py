@@ -2,19 +2,36 @@
 
 Handles the training of the Reinforcement Learning Agent for the Wiki Game
 
+TODO:
+
+- put all hyperparameters into argparse
+- glove representations for policy evaluation
+- figure out how to capture state for other vectors 
+
 """
 
 from parse import parser
 import random
 import math
+from qnetwork import QNetwork
 import torch
 import torch.nn as nn
 import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
+from gymEnv.wikiGame.envs.wikiGame import wikiGame
 
 from replay_utils import Transition, ReplayMemory
 
 # if gpu is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# set up matplotlib
+is_ipython = 'inline' in matplotlib.get_backend()
+if is_ipython:
+    from IPython import display
+
+plt.ion()
 
 BATCH_SIZE = 128
 GAMMA = 0.999
@@ -23,6 +40,13 @@ EPS_END = 0.05
 EPS_DECAY = 200
 TARGET_UPDATE = 10
 WIKIPEDIA_DIAMETER = 70
+BUFFER_CAPACITY = 1000
+STATE_SIZE = 600
+ACTION_SIZE = 10000
+SEED = 6884
+FC1_UNITS = 1024
+FC2_UNITS = 512
+LR = 3e-4
 
 def filter_valid_actions(state, expected_reward_vector):
     valid_transitions = torch.Tensor([int(neighbor) for neighbor in state.out_neighbors()], dtype=torch.long)
@@ -96,7 +120,7 @@ def optimize_model(memory, policy_net, target_net, optimizer):
         param.grad.data.clamp_(-1, 1)
     optimizer.step()
 
-def train(env, memory, policy_net, target_net):
+def train(env, memory, policy_net, target_net, optimizer):
     num_episodes = 50
     episode_durations = []
     steps_done = 0
@@ -123,23 +147,46 @@ def train(env, memory, policy_net, target_net):
             state = next_state
 
             # Perform one step of the optimization (on the policy network)
-            optimize_model()
+            optimize_model(memory, policy_net, target_net, optimizer)
             if done:
                 episode_durations.append(t + 1)
-                plot_durations()
+                plot_durations(episode_durations)
                 break
         # Update the target network, copying all weights and biases in DQN
         if i_episode % TARGET_UPDATE == 0:
             target_net.load_state_dict(policy_net.state_dict())
 
-    print('Complete')
+    print('Training Complete')
     env.render()
     env.close()
-    plt.ioff()
-    plt.show()
+
+def plot_durations(episode_durations):
+    plt.figure(2)
+    plt.clf()
+    durations_t = torch.tensor(episode_durations, dtype=torch.float)
+    plt.title('Training...')
+    plt.xlabel('Episode')
+    plt.ylabel('Duration')
+    plt.plot(durations_t.numpy())
+    # Take 100 episode averages and plot them too
+    if len(durations_t) >= 100:
+        means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
+        means = torch.cat((torch.zeros(99), means))
+        plt.plot(means.numpy())
+
+    plt.pause(0.001)  # pause a bit so that plots are updated
+    if is_ipython:
+        display.clear_output(wait=True)
+        display.display(plt.gcf())
 
 def main(args):
-    pass
+    memory = ReplayMemory(BUFFER_CAPACITY)
+    policy_net = QNetwork(STATE_SIZE, ACTION_SIZE, SEED, FC1_UNITS,  FC2_UNITS)
+    target_net = QNetwork(STATE_SIZE, ACTION_SIZE, SEED, FC1_UNITS,  FC2_UNITS)
+    optimizer = torch.optim.Adam(policy_net.parameters(), lr=LR)
+    env = wikiGame()
+    train(env, memory, policy_net, target_net, optimizer)
+    return
 
 if __name__ == "__main__":
     args = parser.parse_args()

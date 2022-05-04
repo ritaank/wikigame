@@ -40,7 +40,7 @@ class wikiGame(gym.Env):
     """
     metadata = {'render.modes': ['human', 'graph', 'interactive']}
 
-    def __init__(self, network_size=10, input_nodes=3):
+    def __init__(self):
 
         graph_file = Path("./wikiGraph.xml.gz")
         if graph_file.is_file():
@@ -54,8 +54,6 @@ class wikiGame(gym.Env):
         else:
             self.graph, self.ix_to_name_d, self.name_to_ix_d = create_wiki_graph()
             self.graph.save("./wikiGraph.xml.gz")
-            
-        self.network_size = network_size
 
         self.current_vertex, self.goal_vertex = None, None      
 
