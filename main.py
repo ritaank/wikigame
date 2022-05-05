@@ -10,6 +10,9 @@ TODO:
 
 """
 
+import warnings
+warnings.filterwarnings('ignore')
+
 from parse import parser
 import random
 import math
@@ -21,12 +24,10 @@ import matplotlib
 import matplotlib.pyplot as plt
 from gymEnv.wikiGame.envs.wikiGame import wikiGame
 
-from pytorch_fast_elmo import FastElmo, batch_to_char_ids
-
 from replay_utils import Transition, ReplayMemory
 
 from allennlp.modules.elmo import Elmo, batch_to_ids
-from sacremoses import MosesTokenizer, MosesDetokenizer
+from sacremoses import MosesTokenizer
 
 # if gpu is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -59,7 +60,7 @@ weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_51
 # Compute two different representation for each token.
 # Each representation is a linear weighted combination for the
 # 3 layers in ELMo (i.e., charcnn, the outputs of the two BiLSTM))
-elmo = Elmo(options_file, weight_file, 2, dropout=0)
+#elmo = Elmo(options_file, weight_file, 2, dropout=0)
 
 def filter_valid_actions(state, expected_reward_vector):
     valid_transitions = torch.Tensor([int(neighbor) for neighbor in state.out_neighbors()], dtype=torch.long)

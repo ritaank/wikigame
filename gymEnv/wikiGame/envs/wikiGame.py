@@ -1,22 +1,26 @@
+import sys  
+sys.path.append('/opt/homebrew/Cellar/graph-tool/2.44_1/lib/python3.9/site-packages')
+
 import gym
 from gym import spaces
 from pathlib import Path
 from graph_tool.all import Graph, load_graph
 import pandas as pd
 import numpy as np
+import os
 
 def create_wiki_graph():
-    df = pd.read_csv('./enwiki.wikilink_graph.2018-03-01.csv.gz', sep='\t')
+    df = pd.read_csv('gymEnv/wikiGame/envs/enwiki.wikilink_graph.2018-03-01.csv.gz', nrows=10000, sep='\t')
     all_pages = df['page_title_from'].unique()
     g = Graph()
     v_prop = g.new_vertex_property("string")
-    g.add_vertex(len(all_pages))
+    vertices = g.add_vertex(len(all_pages))
     ix_to_name_d = {}
     name_to_ix_d = {}
-    for (vertex, ix), page_name in zip(iter(g.vertex_index), all_pages):
+    for vertex, page_name in zip(vertices, all_pages):
         v_prop[vertex] = page_name
-        ix_to_name_d[ix] = page_name
-        name_to_ix_d[page_name] = ix
+        ix_to_name_d[int(vertex)] = page_name
+        name_to_ix_d[page_name] = int(vertex)
 
     #assign properties as a dic value
     g.vertex_properties["name"] = v_prop 
@@ -28,7 +32,7 @@ def create_wiki_graph():
     #add edges from remapped dataframe
     g.add_edge_list(df[["page_title_from_ix", "page_title_to_ix"]].values)
 
-    return g, ix_to_name_d, name_to_ix_d
+    return g, ix_to_name_d, name_to_ix_d, len(all_pages)
 
 class wikiGame(gym.Env):
     """
@@ -42,18 +46,20 @@ class wikiGame(gym.Env):
 
     def __init__(self):
 
-        graph_file = Path("./wikiGraph.xml.gz")
+        graph_file = Path("gymEnv/wikiGame/envs/wikiGraph.xml.gz")
         if graph_file.is_file():
-            self.graph = load_graph("./wikiGraph.xml.gz")
+            self.graph = load_graph("gymEnv/wikiGame/envs/wikiGraph.xml.gz")
             self.ix_to_name_d = {}
             self.name_to_ix_d = {}
             v_prop = self.graph.vertex_properties["name"]
-            for vertex, ix in self.graph.vertex_index: 
-                self.ix_to_name_d[ix] = v_prop[vertex]
-                self.name_to_ix_d[v_prop[vertex]] = ix
+            self.n_vertices = 0
+            for vertex in self.graph.vertices(): 
+                self.ix_to_name_d[int(vertex)] = v_prop[vertex]
+                self.name_to_ix_d[v_prop[vertex]] = int(vertex)
+                self.n_vertices += 1
         else:
-            self.graph, self.ix_to_name_d, self.name_to_ix_d = create_wiki_graph()
-            self.graph.save("./wikiGraph.xml.gz")
+            self.graph, self.ix_to_name_d, self.name_to_ix_d, self.n_vertices = create_wiki_graph()
+            self.graph.save("gymEnv/wikiGame/envs/wikiGraph.xml.gz")
 
         self.current_vertex, self.goal_vertex = None, None      
 
@@ -77,10 +83,10 @@ class wikiGame(gym.Env):
         if self.goal_vertex == self.current_vertex:
             reward = 1
             done = 1
-        return None, reward, done, {"vertex": self.current_vertex} #no observations, this is an MDP not POMDP
+        return None, reward, done, {"next_vertex": self.current_vertex} #no observations, this is an MDP not POMDP
 
     def reset(self):
-        init_ix, goal_ix = np.random.choice(self.graph.num_vertices, 2, replace=False)
+        init_ix, goal_ix = np.random.choice(self.n_vertices, 2, replace=False)
         self.current_vertex = self.graph.vertex(init_ix)
         self.goal_vertex = self.graph.vertex(goal_ix)
         return self.current_vertex, \
