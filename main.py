@@ -21,7 +21,12 @@ import matplotlib
 import matplotlib.pyplot as plt
 from gymEnv.wikiGame.envs.wikiGame import wikiGame
 
+from pytorch_fast_elmo import FastElmo, batch_to_char_ids
+
 from replay_utils import Transition, ReplayMemory
+
+from allennlp.modules.elmo import Elmo, batch_to_ids
+from sacremoses import MosesTokenizer, MosesDetokenizer
 
 # if gpu is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -41,12 +46,20 @@ EPS_DECAY = 200
 TARGET_UPDATE = 10
 WIKIPEDIA_DIAMETER = 70
 BUFFER_CAPACITY = 1000
-STATE_SIZE = 600
-ACTION_SIZE = 10000
+STATE_SIZE = 1024*3
 SEED = 6884
 FC1_UNITS = 1024
-FC2_UNITS = 512
+FC2_UNITS = 256
 LR = 3e-4
+
+#tokenizer + elmo model
+mt = MosesTokenizer(lang='en')
+options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json"
+weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
+# Compute two different representation for each token.
+# Each representation is a linear weighted combination for the
+# 3 layers in ELMo (i.e., charcnn, the outputs of the two BiLSTM))
+elmo = Elmo(options_file, weight_file, 2, dropout=0)
 
 def filter_valid_actions(state, expected_reward_vector):
     valid_transitions = torch.Tensor([int(neighbor) for neighbor in state.out_neighbors()], dtype=torch.long)
@@ -58,6 +71,12 @@ def randomly_select_action(state):
     random_action = np.random.choice([int(neighbor) for neighbor in state.out_neighbors()], 1)
     return random_action
 
+def get_elmo_embedding(text):
+    tokenized_text = mt.tokenize(text, escape=False)
+    character_ids = batch_to_ids(tokenized_text)
+    embedding = elmo(character_ids).mean(dim=(0, 1))
+    return embedding
+
 def evaluate_expected_rewards(policy_net, current_state, goal_state_embedding, vertex_to_title):
     current_state_embedding = get_elmo_embedding(vertex_to_title[int(current_state)])
     rewards = torch.zeros((len(current_state.out_neighbors(), 1)))
@@ -67,7 +86,6 @@ def evaluate_expected_rewards(policy_net, current_state, goal_state_embedding, v
         indexes[i] = int(neighbor)
         rewards[i] = policy_net(torch.cat((goal_state_embedding, current_state_embedding, next_state_embedding), 0))
     return rewards, indexes
-
 
 def select_action(policy_net, state, goal_state, goal_state_embedding, steps_done, vertex_to_title):
     sample = random.random()
@@ -191,6 +209,7 @@ def plot_durations(episode_durations):
         display.display(plt.gcf())
 
 def main(args):
+    
     memory = ReplayMemory(BUFFER_CAPACITY)
     policy_net = QNetwork(STATE_SIZE, SEED, FC1_UNITS,  FC2_UNITS)
     target_net = QNetwork(STATE_SIZE, SEED, FC1_UNITS,  FC2_UNITS)

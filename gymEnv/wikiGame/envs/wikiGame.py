@@ -77,9 +77,6 @@ class wikiGame(gym.Env):
         if self.goal_vertex == self.current_vertex:
             reward = 1
             done = 1
-        extra_details = {}
-        extra_details['next_vertex'] = self.current_vertex
-        extra_details['next_vertex_title'] = self.ix_to_name_d[]
         return None, reward, done, {"vertex": self.current_vertex} #no observations, this is an MDP not POMDP
 
     def reset(self):
