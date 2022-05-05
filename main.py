@@ -62,12 +62,6 @@ weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_51
 # 3 layers in ELMo (i.e., charcnn, the outputs of the two BiLSTM))
 #elmo = Elmo(options_file, weight_file, 2, dropout=0)
 
-def filter_valid_actions(state, expected_reward_vector):
-    valid_transitions = torch.Tensor([int(neighbor) for neighbor in state.out_neighbors()], dtype=torch.long)
-    updated_reward = torch.full(expected_reward_vector.size(), fill_value=float("-inf"))
-    updated_reward[valid_transitions] = expected_reward_vector[valid_transitions]
-    return updated_reward
-
 def randomly_select_action(state):
     random_action = np.random.choice([int(neighbor) for neighbor in state.out_neighbors()], 1)
     return random_action
@@ -210,7 +204,6 @@ def plot_durations(episode_durations):
         display.display(plt.gcf())
 
 def main(args):
-    
     memory = ReplayMemory(BUFFER_CAPACITY)
     policy_net = QNetwork(STATE_SIZE, SEED, FC1_UNITS,  FC2_UNITS)
     target_net = QNetwork(STATE_SIZE, SEED, FC1_UNITS,  FC2_UNITS)
