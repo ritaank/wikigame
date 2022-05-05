@@ -47,7 +47,7 @@ class wikiGame(gym.Env):
             self.graph = load_graph("./wikiGraph.xml.gz")
             self.ix_to_name_d = {}
             self.name_to_ix_d = {}
-            v_prop = g.vertex_properties["name"]
+            v_prop = self.graph.vertex_properties["name"]
             for vertex, ix in self.graph.vertex_index: 
                 self.ix_to_name_d[ix] = v_prop[vertex]
                 self.name_to_ix_d[v_prop[vertex]] = ix
@@ -77,10 +77,15 @@ class wikiGame(gym.Env):
         if self.goal_vertex == self.current_vertex:
             reward = 1
             done = 1
+        extra_details = {}
+        extra_details['next_vertex'] = self.current_vertex
+        extra_details['next_vertex_title'] = self.ix_to_name_d[]
         return None, reward, done, {"vertex": self.current_vertex} #no observations, this is an MDP not POMDP
 
     def reset(self):
         init_ix, goal_ix = np.random.choice(self.graph.num_vertices, 2, replace=False)
         self.current_vertex = self.graph.vertex(init_ix)
         self.goal_vertex = self.graph.vertex(goal_ix)
-        return self.current_vertex, self.goal_vertex
+        return self.current_vertex, \
+                self.goal_vertex, \
+                self.ix_to_name_d

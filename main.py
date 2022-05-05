@@ -6,7 +6,7 @@ TODO:
 
 - put all hyperparameters into argparse
 - glove representations for policy evaluation
-- figure out how to capture state for other vectors 
+- figure out how to capture state for vectors 
 
 """
 
@@ -58,7 +58,18 @@ def randomly_select_action(state):
     random_action = np.random.choice([int(neighbor) for neighbor in state.out_neighbors()], 1)
     return random_action
 
-def select_action(policy_net, state, goal_state, steps_done):
+def evaluate_expected_rewards(policy_net, current_state, goal_state_embedding, vertex_to_title):
+    current_state_embedding = get_elmo_embedding(vertex_to_title[int(current_state)])
+    rewards = torch.zeros((len(current_state.out_neighbors(), 1)))
+    indexes = torch.zeros((len(current_state.out_neighbors(), 1)))
+    for i, neighbor in enumerate(current_state.out_neighbors()):
+        next_state_embedding = get_elmo_embedding(vertex_to_title[int(neighbor)])
+        indexes[i] = int(neighbor)
+        rewards[i] = policy_net(torch.cat((goal_state_embedding, current_state_embedding, next_state_embedding), 0))
+    return rewards, indexes
+
+
+def select_action(policy_net, state, goal_state, goal_state_embedding, steps_done, vertex_to_title):
     sample = random.random()
     eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * steps_done / EPS_DECAY)
     if sample > eps_threshold:
@@ -66,10 +77,9 @@ def select_action(policy_net, state, goal_state, steps_done):
             # t.max(1) will return largest column value of each row.
             # second column on max result is index of where max element was
             # found, so we pick action with the larger expected reward.
-            expected_reward_vector = evaluate_expected_rewards(policy_net, state, goal_state)
-            valid_reward_vector = filter_valid_actions(state, expected_reward_vector)
-            max_reward_ix  = valid_reward_vector.max(dim=1)['indices'].view(1,1)
-            return max_reward_ix
+            reward_vector, ix_vector = evaluate_expected_rewards(policy_net, state, goal_state_embedding, vertex_to_title)
+            max_reward_ix  = reward_vector.max(dim=1)['indices'].view(1,1)
+            return ix_vector[max_reward_ix]
     else:
         return torch.tensor([[randomly_select_action(state)]], device=device, dtype=torch.long)
 
@@ -126,13 +136,14 @@ def train(env, memory, policy_net, target_net, optimizer):
     steps_done = 0
     for i_episode in range(num_episodes):
         # Initialize the environment and state
-        state, goal_state = env.reset()
+        state, goal_state, vertex_to_title = env.reset()
+        goal_state_embedding = get_elmo_embedding(vertex_to_title[int(goal_state)])
         for t in WIKIPEDIA_DIAMETER:
             # Select and perform an action
-            action = select_action(policy_net, state, goal_state, steps_done)
+            action = select_action(policy_net, state, goal_state, goal_state_embedding, steps_done, vertex_to_title)
             steps_done += 1
-            _, reward, done, v_dict = env.step(action.item())
-            next_state = v_dict['vertex']
+            _, reward, done, info_dict = env.step(action.item())
+            next_state = info_dict['next_vertex']
 
             reward = torch.tensor([reward], device=device)
 
@@ -181,8 +192,8 @@ def plot_durations(episode_durations):
 
 def main(args):
     memory = ReplayMemory(BUFFER_CAPACITY)
-    policy_net = QNetwork(STATE_SIZE, ACTION_SIZE, SEED, FC1_UNITS,  FC2_UNITS)
-    target_net = QNetwork(STATE_SIZE, ACTION_SIZE, SEED, FC1_UNITS,  FC2_UNITS)
+    policy_net = QNetwork(STATE_SIZE, SEED, FC1_UNITS,  FC2_UNITS)
+    target_net = QNetwork(STATE_SIZE, SEED, FC1_UNITS,  FC2_UNITS)
     optimizer = torch.optim.Adam(policy_net.parameters(), lr=LR)
     env = wikiGame()
     train(env, memory, policy_net, target_net, optimizer)
