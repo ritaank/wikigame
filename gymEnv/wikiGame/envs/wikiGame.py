@@ -14,6 +14,7 @@ graph_source = 'enwiki.wikilink_graph.2001-03-01.csv'
 
 def create_wiki_graph():
     df = pd.read_csv(f'gymEnv/wikiGame/envs/{graph_source}', sep='\t')
+    print(df.head())
     all_pages = df['page_title_from'].unique()
     g = Graph()
     v_prop = g.new_vertex_property("string")
@@ -27,8 +28,8 @@ def create_wiki_graph():
 
     #assign properties as a dic value
     g.vertex_properties["name"] = v_prop
-
     #remap page titles to graph vertex indexes... will make adding edges significantly easier
+    
     df["page_title_from_ix"] = df["page_title_from"].map(name_to_ix_d)
     df["page_title_to_ix"] = df["page_title_to"].map(name_to_ix_d)
 
