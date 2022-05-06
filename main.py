@@ -6,12 +6,14 @@ TODO:
 
 - put all hyperparameters into argparse
 - glove representations for policy evaluation
-- figure out how to capture state for vectors 
+- figure out how to capture state for vectors
 
 """
-
+import sys
+sys.setrecursionlimit(10**3)
 import warnings
 warnings.filterwarnings('ignore')
+import time
 
 from parse import parser
 import random
@@ -23,6 +25,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from gymEnv.wikiGame.envs.wikiGame import wikiGame
+from tqdm import tqdm
 
 from replay_utils import Transition, ReplayMemory
 
@@ -60,16 +63,25 @@ weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_51
 # Compute two different representation for each token.
 # Each representation is a linear weighted combination for the
 # 3 layers in ELMo (i.e., charcnn, the outputs of the two BiLSTM))
-#elmo = Elmo(options_file, weight_file, 2, dropout=0)
+elmo = Elmo(options_file, weight_file, 2, dropout=0)
 
 def randomly_select_action(state):
     random_action = np.random.choice([int(neighbor) for neighbor in state.out_neighbors()], 1)
     return random_action
 
 def get_elmo_embedding(text):
+    print(f"text {text}")
     tokenized_text = mt.tokenize(text, escape=False)
+    print(f"tokenized_text {tokenized_text}")
     character_ids = batch_to_ids(tokenized_text)
-    embedding = elmo(character_ids).mean(dim=(0, 1))
+
+    embedding = elmo(character_ids)
+    print(f"char ids: \n type {type(character_ids)} \n size{character_ids.size()}")
+    print(f"embeddding type {type(embedding)} \n length{len(embedding)}")
+    print(f"each tensor in embedding has dims{ embedding['elmo_representations'][0].size()}")
+    # time.sleep(60)
+    embedding = torch.stack(embedding['elmo_representations'], dim=0)
+    embedding = embedding.mean(dim=(0, 1))
     return embedding
 
 def evaluate_expected_rewards(policy_net, current_state, goal_state_embedding, vertex_to_title):
@@ -91,7 +103,7 @@ def select_action(policy_net, state, goal_state, goal_state_embedding, steps_don
             # second column on max result is index of where max element was
             # found, so we pick action with the larger expected reward.
             reward_vector, ix_vector = evaluate_expected_rewards(policy_net, state, goal_state_embedding, vertex_to_title)
-            max_reward_ix  = reward_vector.max(dim=1)['indices'].view(1,1)
+            max_reward_ix  = reward_vector.max(dim=1)['indices'].view(1,1) #np.argmax(reward_vector)
             return ix_vector[max_reward_ix]
     else:
         return torch.tensor([[randomly_select_action(state)]], device=device, dtype=torch.long)
@@ -147,11 +159,12 @@ def train(env, memory, policy_net, target_net, optimizer):
     num_episodes = 50
     episode_durations = []
     steps_done = 0
-    for i_episode in range(num_episodes):
+    for i_episode in tqdm(range(num_episodes)):
         # Initialize the environment and state
         state, goal_state, vertex_to_title = env.reset()
         goal_state_embedding = get_elmo_embedding(vertex_to_title[int(goal_state)])
-        for t in WIKIPEDIA_DIAMETER:
+        print(f"goal state embedding {goal_state_embedding.size()}")
+        for t in range(WIKIPEDIA_DIAMETER):
             # Select and perform an action
             action = select_action(policy_net, state, goal_state, goal_state_embedding, steps_done, vertex_to_title)
             steps_done += 1
@@ -204,14 +217,18 @@ def plot_durations(episode_durations):
         display.display(plt.gcf())
 
 def main(args):
+    print("main start", flush=True)
     memory = ReplayMemory(BUFFER_CAPACITY)
     policy_net = QNetwork(STATE_SIZE, SEED, FC1_UNITS,  FC2_UNITS)
     target_net = QNetwork(STATE_SIZE, SEED, FC1_UNITS,  FC2_UNITS)
     optimizer = torch.optim.Adam(policy_net.parameters(), lr=LR)
+    print("creating wikigame", flush=True)
     env = wikiGame()
+    print("wikigame created", flush=True)
     train(env, memory, policy_net, target_net, optimizer)
     return
 
 if __name__ == "__main__":
+    print("entry", flush=True)
     args = parser.parse_args()
     main(args)

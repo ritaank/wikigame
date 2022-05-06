@@ -1,4 +1,4 @@
-import sys  
+import sys
 sys.path.append('/opt/homebrew/Cellar/graph-tool/2.44_1/lib/python3.9/site-packages')
 
 import gym
@@ -9,8 +9,11 @@ import pandas as pd
 import numpy as np
 import os
 
+graph_source = 'enwiki.wikilink_graph.2001-03-01.csv'
+# 'enwiki.wikilink_graph.2018-03-01.csv.gz
+
 def create_wiki_graph():
-    df = pd.read_csv('gymEnv/wikiGame/envs/enwiki.wikilink_graph.2018-03-01.csv.gz', nrows=10000, sep='\t')
+    df = pd.read_csv(f'gymEnv/wikiGame/envs/{graph_source}', sep='\t')
     all_pages = df['page_title_from'].unique()
     g = Graph()
     v_prop = g.new_vertex_property("string")
@@ -23,7 +26,7 @@ def create_wiki_graph():
         name_to_ix_d[page_name] = int(vertex)
 
     #assign properties as a dic value
-    g.vertex_properties["name"] = v_prop 
+    g.vertex_properties["name"] = v_prop
 
     #remap page titles to graph vertex indexes... will make adding edges significantly easier
     df["page_title_from_ix"] = df["page_title_from"].map(name_to_ix_d)
@@ -53,7 +56,7 @@ class wikiGame(gym.Env):
             self.name_to_ix_d = {}
             v_prop = self.graph.vertex_properties["name"]
             self.n_vertices = 0
-            for vertex in self.graph.vertices(): 
+            for vertex in self.graph.vertices():
                 self.ix_to_name_d[int(vertex)] = v_prop[vertex]
                 self.name_to_ix_d[v_prop[vertex]] = int(vertex)
                 self.n_vertices += 1
@@ -61,9 +64,10 @@ class wikiGame(gym.Env):
             self.graph, self.ix_to_name_d, self.name_to_ix_d, self.n_vertices = create_wiki_graph()
             self.graph.save("gymEnv/wikiGame/envs/wikiGraph.xml.gz")
 
-        self.current_vertex, self.goal_vertex = None, None      
+        self.current_vertex, self.goal_vertex = None, None
+        print("in wikigame() init, before reset")
 
-        self.reset()
+        # self.reset()
 
     def render(self, mode='human'):
         if mode == 'graph':
@@ -89,6 +93,7 @@ class wikiGame(gym.Env):
         init_ix, goal_ix = np.random.choice(self.n_vertices, 2, replace=False)
         self.current_vertex = self.graph.vertex(init_ix)
         self.goal_vertex = self.graph.vertex(goal_ix)
+        print(f"current vtx: {self.ix_to_name_d[int(self.current_vertex)]},\tgoal vtx: {self.ix_to_name_d[int(self.goal_vertex)]}")
         return self.current_vertex, \
                 self.goal_vertex, \
                 self.ix_to_name_d
