@@ -50,7 +50,7 @@ EPS_DECAY = 200
 TARGET_UPDATE = 10
 WIKIPEDIA_DIAMETER = 70
 BUFFER_CAPACITY = 1000
-STATE_SIZE = 1024*3
+STATE_SIZE = 1024
 SEED = 6884
 FC1_UNITS = 1024
 FC2_UNITS = 256
@@ -86,12 +86,22 @@ def get_elmo_embedding(text):
 
 def evaluate_expected_rewards(policy_net, current_state, goal_state_embedding, vertex_to_title):
     current_state_embedding = get_elmo_embedding(vertex_to_title[int(current_state)])
-    rewards = torch.zeros((len(current_state.out_neighbors(), 1)))
-    indexes = torch.zeros((len(current_state.out_neighbors(), 1)))
+    rewards = torch.zeros((len([current_state.out_neighbors()]), 1))
+    indexes = torch.zeros((len([current_state.out_neighbors()]), 1))
+    print([current_state.out_neighbors()])
+    print("eval expect")
+    print(rewards.size())
+    print(indexes.size())
     for i, neighbor in enumerate(current_state.out_neighbors()):
+        print(i)
         next_state_embedding = get_elmo_embedding(vertex_to_title[int(neighbor)])
         indexes[i] = int(neighbor)
-        rewards[i] = policy_net(torch.cat((goal_state_embedding, current_state_embedding, next_state_embedding), 0))
+        print("mat sizes")
+        print(goal_state_embedding.size())
+        print(current_state_embedding.size())
+        print(next_state_embedding.size())
+        x = policy_net(torch.cat((goal_state_embedding, current_state_embedding, next_state_embedding), 0))
+        rewards[i] = x.mean(dim=0).item()
     return rewards, indexes
 
 def select_action(policy_net, state, goal_state, goal_state_embedding, steps_done, vertex_to_title):
@@ -103,7 +113,7 @@ def select_action(policy_net, state, goal_state, goal_state_embedding, steps_don
             # second column on max result is index of where max element was
             # found, so we pick action with the larger expected reward.
             reward_vector, ix_vector = evaluate_expected_rewards(policy_net, state, goal_state_embedding, vertex_to_title)
-            max_reward_ix  = reward_vector.max(dim=1)['indices'].view(1,1) #np.argmax(reward_vector)
+            max_reward_ix  =  np.argmax(reward_vector, axis=1) #reward_vector.max(dim=1)['indices'].view(1,1)
             return ix_vector[max_reward_ix]
     else:
         return torch.tensor([[randomly_select_action(state)]], device=device, dtype=torch.long)

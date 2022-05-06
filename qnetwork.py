@@ -29,7 +29,9 @@ class QNetwork(nn.Module):
         """
         Build a network that maps state -> action values.
         """
+        print(f"forward, x dims {x.size()}")
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         out = self.fc3(x)
+        print(out.size())
         return out
