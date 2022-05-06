@@ -15,6 +15,8 @@ import warnings
 warnings.filterwarnings('ignore')
 import time
 
+from pprint import pprint
+
 from parse import parser
 import random
 import math
@@ -42,7 +44,7 @@ if is_ipython:
 
 plt.ion()
 
-BATCH_SIZE = 128
+BATCH_SIZE = 16#128
 GAMMA = 0.999
 EPS_START = 0.9
 EPS_END = 0.05
@@ -70,15 +72,14 @@ def randomly_select_action(state):
     return random_action
 
 def get_elmo_embedding(text):
-    print(f"text {text}")
+    # print(f"text {text}")
     tokenized_text = mt.tokenize(text, escape=False)
-    print(f"tokenized_text {tokenized_text}")
     character_ids = batch_to_ids(tokenized_text)
 
     embedding = elmo(character_ids)
-    print(f"char ids: \n type {type(character_ids)} \n size{character_ids.size()}")
-    print(f"embeddding type {type(embedding)} \n length{len(embedding)}")
-    print(f"each tensor in embedding has dims{ embedding['elmo_representations'][0].size()}")
+    # print(f"char ids: \n type {type(character_ids)} \n size{character_ids.size()}")
+    # print(f"embeddding type {type(embedding)} \n length{len(embedding)}")
+    # print(f"each tensor in embedding has dims{ embedding['elmo_representations'][0].size()}")
     # time.sleep(60)
     embedding = torch.stack(embedding['elmo_representations'], dim=0)
     embedding = embedding.mean(dim=(0, 1))
@@ -86,20 +87,20 @@ def get_elmo_embedding(text):
 
 def evaluate_expected_rewards(policy_net, current_state, goal_state_embedding, vertex_to_title):
     current_state_embedding = get_elmo_embedding(vertex_to_title[int(current_state)])
-    rewards = torch.zeros((len([current_state.out_neighbors()]), 1))
-    indexes = torch.zeros((len([current_state.out_neighbors()]), 1))
-    print([current_state.out_neighbors()])
-    print("eval expect")
-    print(rewards.size())
-    print(indexes.size())
+    rewards = torch.zeros((sum(1 for _ in current_state.out_neighbors()), 1))
+    indexes = torch.zeros((sum(1 for _ in current_state.out_neighbors()), 1))
+    # print([current_state.out_neighbors()])
+    # print("eval expect")
+    # print(rewards.size())
+    # print(indexes.size())
     for i, neighbor in enumerate(current_state.out_neighbors()):
-        print(i)
+        # print(i)
         next_state_embedding = get_elmo_embedding(vertex_to_title[int(neighbor)])
         indexes[i] = int(neighbor)
-        print("mat sizes")
-        print(goal_state_embedding.size())
-        print(current_state_embedding.size())
-        print(next_state_embedding.size())
+        # print("mat sizes")
+        # print(goal_state_embedding.size())
+        # print(current_state_embedding.size())
+        # print(next_state_embedding.size())
         x = policy_net(torch.cat((goal_state_embedding, current_state_embedding, next_state_embedding), 0))
         rewards[i] = x.mean(dim=0).item()
     return rewards, indexes
@@ -108,14 +109,18 @@ def select_action(policy_net, state, goal_state, goal_state_embedding, steps_don
     sample = random.random()
     eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * steps_done / EPS_DECAY)
     if sample > eps_threshold:
+        # print("nonrandom")
         with torch.no_grad():
             # t.max(1) will return largest column value of each row.
             # second column on max result is index of where max element was
             # found, so we pick action with the larger expected reward.
             reward_vector, ix_vector = evaluate_expected_rewards(policy_net, state, goal_state_embedding, vertex_to_title)
-            max_reward_ix  =  np.argmax(reward_vector, axis=1) #reward_vector.max(dim=1)['indices'].view(1,1)
+            # print("rewardvectorsize\t", reward_vector, reward_vector.size())
+            max_reward_ix  =  np.argmax(reward_vector, axis=0) #reward_vector.max(dim=1)['indices'].view(1,1)
+            # print(f"maxrewardix {max_reward_ix}")
             return ix_vector[max_reward_ix]
     else:
+        print("random selection")
         return torch.tensor([[randomly_select_action(state)]], device=device, dtype=torch.long)
 
 def optimize_model(memory, policy_net, target_net, optimizer):
@@ -127,17 +132,28 @@ def optimize_model(memory, policy_net, target_net, optimizer):
     # to Transition of batch-arrays.
     batch = Transition(*zip(*transitions))
 
+    pprint(batch.action)
+    pprint(batch.reward)
+
     # Compute a mask of non-final states and concatenate the batch elements
     # (a final state would've been the one after which simulation ended)
     non_final_mask = torch.tensor(tuple( #transforms iterator to tuple, then to tensor
                                         map(lambda s: s is not None, batch.next_state) #iterator
-                                        ), 
-                                device=device, 
+                                        ),
+                                device=device,
                                 dtype=torch.bool)
-    non_final_next_states = torch.cat([s for s in batch.next_state if s is not None])
-    state_batch = torch.cat(batch.state)
-    action_batch = torch.cat(batch.action)
-    reward_batch = torch.cat(batch.reward)
+    non_final_next_states = torch.as_tensor([[int(s) for s in batch.next_state if s is not None]])
+    print(non_final_next_states.size())
+    pprint(batch.state)
+    state_batch = torch.as_tensor([[int(s) for s in batch.state if s is not None]])
+    reward_batch = torch.unsqueeze(torch.cat(batch.reward),0)
+    action_batch = torch.as_tensor([[int(s) for s in batch.action]])
+
+    print(state_batch.size())
+    print(action_batch.size())
+    print(reward_batch.size())
+    print("done")
+
 
     # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
     # columns of actions taken. These are the actions which would've been taken
@@ -173,10 +189,11 @@ def train(env, memory, policy_net, target_net, optimizer):
         # Initialize the environment and state
         state, goal_state, vertex_to_title = env.reset()
         goal_state_embedding = get_elmo_embedding(vertex_to_title[int(goal_state)])
-        print(f"goal state embedding {goal_state_embedding.size()}")
-        for t in range(WIKIPEDIA_DIAMETER):
+        # print(f"goal state embedding {goal_state_embedding.size()}")
+        for t in tqdm(range(WIKIPEDIA_DIAMETER)):
             # Select and perform an action
             action = select_action(policy_net, state, goal_state, goal_state_embedding, steps_done, vertex_to_title)
+            # print(f"actionsize\t{action.size()}")
             steps_done += 1
             _, reward, done, info_dict = env.step(action.item())
             next_state = info_dict['next_vertex']
@@ -194,6 +211,7 @@ def train(env, memory, policy_net, target_net, optimizer):
             state = next_state
 
             # Perform one step of the optimization (on the policy network)
+            print("about to optimize model", flush=True)
             optimize_model(memory, policy_net, target_net, optimizer)
             if done:
                 episode_durations.append(t + 1)
@@ -227,18 +245,15 @@ def plot_durations(episode_durations):
         display.display(plt.gcf())
 
 def main(args):
-    print("main start", flush=True)
     memory = ReplayMemory(BUFFER_CAPACITY)
     policy_net = QNetwork(STATE_SIZE, SEED, FC1_UNITS,  FC2_UNITS)
     target_net = QNetwork(STATE_SIZE, SEED, FC1_UNITS,  FC2_UNITS)
     optimizer = torch.optim.Adam(policy_net.parameters(), lr=LR)
     print("creating wikigame", flush=True)
     env = wikiGame()
-    print("wikigame created", flush=True)
     train(env, memory, policy_net, target_net, optimizer)
     return
 
 if __name__ == "__main__":
-    print("entry", flush=True)
     args = parser.parse_args()
     main(args)
