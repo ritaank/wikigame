@@ -16,7 +16,7 @@ class QNetwork(nn.Module):
             fc1_unit (int): Number of nodes in first hidden layer
             fc2_unit (int): Number of nodes in second hidden layer
         """
-        print("in: qnetwork.py", flush=True)
+        # print("in: qnetwork.py", flush=True)
         super(QNetwork,self).__init__() ## calls __init__ method of nn.Module class
         self.seed = torch.manual_seed(seed)
         self.fc1 = nn.Linear(state_size, fc1_units)
@@ -29,9 +29,9 @@ class QNetwork(nn.Module):
         """
         Build a network that maps state -> action values.
         """
-        print(f"forward, x dims {x.size()}")
+        # print(f"forward, x dims {x.size()}")
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         out = self.fc3(x)
-        print(out.size())
+        # print(out.size())
         return out

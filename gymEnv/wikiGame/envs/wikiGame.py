@@ -65,7 +65,7 @@ class wikiGame(gym.Env):
             self.graph.save("gymEnv/wikiGame/envs/wikiGraph.xml.gz")
 
         self.current_vertex, self.goal_vertex = None, None
-        print("in wikigame() init, before reset")
+        # print("in wikigame() init, before reset")
 
         # self.reset()
 
@@ -81,6 +81,7 @@ class wikiGame(gym.Env):
                         output_size=(1000, 1000), output=filename)
 
     def step(self, action):
+        # print("inside wikigame step", flush=True)
         self.current_vertex = self.graph.vertex(action)
         done = 0
         reward = -1
@@ -93,7 +94,7 @@ class wikiGame(gym.Env):
         init_ix, goal_ix = np.random.choice(self.n_vertices, 2, replace=False)
         self.current_vertex = self.graph.vertex(init_ix)
         self.goal_vertex = self.graph.vertex(goal_ix)
-        print(f"current vtx: {self.ix_to_name_d[int(self.current_vertex)]},\tgoal vtx: {self.ix_to_name_d[int(self.goal_vertex)]}")
+        # print(f"current vtx: {self.ix_to_name_d[int(self.current_vertex)]},\tgoal vtx: {self.ix_to_name_d[int(self.goal_vertex)]}")
         return self.current_vertex, \
                 self.goal_vertex, \
                 self.ix_to_name_d
