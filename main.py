@@ -86,8 +86,8 @@ def get_elmo_embedding(text):
 
 def evaluate_expected_rewards(policy_net, current_state, goal_state_embedding, vertex_to_title):
     current_state_embedding = get_elmo_embedding(vertex_to_title[int(current_state)])
-    rewards = torch.zeros((len([current_state.out_neighbors()]), 1))
-    indexes = torch.zeros((len([current_state.out_neighbors()]), 1))
+    rewards = torch.zeros((sum(1 for _ in current_state.out_neighbors()), 1))
+    indexes = torch.zeros((sum(1 for _ in current_state.out_neighbors()), 1))
     print([current_state.out_neighbors()])
     print("eval expect")
     print(rewards.size())
