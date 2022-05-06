@@ -15,6 +15,8 @@ import warnings
 warnings.filterwarnings('ignore')
 import time
 
+from pprint import pprint
+
 from parse import parser
 import random
 import math
@@ -42,7 +44,7 @@ if is_ipython:
 
 plt.ion()
 
-BATCH_SIZE = 128
+BATCH_SIZE = 16#128
 GAMMA = 0.999
 EPS_START = 0.9
 EPS_END = 0.05
@@ -118,6 +120,7 @@ def select_action(policy_net, state, goal_state, goal_state_embedding, steps_don
             # print(f"maxrewardix {max_reward_ix}")
             return ix_vector[max_reward_ix]
     else:
+        print("random selection")
         return torch.tensor([[randomly_select_action(state)]], device=device, dtype=torch.long)
 
 def optimize_model(memory, policy_net, target_net, optimizer):
@@ -129,17 +132,28 @@ def optimize_model(memory, policy_net, target_net, optimizer):
     # to Transition of batch-arrays.
     batch = Transition(*zip(*transitions))
 
+    pprint(batch.action)
+    pprint(batch.reward)
+
     # Compute a mask of non-final states and concatenate the batch elements
     # (a final state would've been the one after which simulation ended)
     non_final_mask = torch.tensor(tuple( #transforms iterator to tuple, then to tensor
                                         map(lambda s: s is not None, batch.next_state) #iterator
-                                        ), 
-                                device=device, 
+                                        ),
+                                device=device,
                                 dtype=torch.bool)
-    non_final_next_states = torch.cat([s for s in batch.next_state if s is not None])
-    state_batch = torch.cat(batch.state)
-    action_batch = torch.cat(batch.action)
-    reward_batch = torch.cat(batch.reward)
+    non_final_next_states = torch.as_tensor([[int(s) for s in batch.next_state if s is not None]])
+    print(non_final_next_states.size())
+    pprint(batch.state)
+    state_batch = torch.as_tensor([[int(s) for s in batch.state if s is not None]])
+    reward_batch = torch.unsqueeze(torch.cat(batch.reward),0)
+    action_batch = torch.as_tensor([[int(s) for s in batch.action]])
+
+    print(state_batch.size())
+    print(action_batch.size())
+    print(reward_batch.size())
+    print("done")
+
 
     # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
     # columns of actions taken. These are the actions which would've been taken
@@ -197,6 +211,7 @@ def train(env, memory, policy_net, target_net, optimizer):
             state = next_state
 
             # Perform one step of the optimization (on the policy network)
+            print("about to optimize model", flush=True)
             optimize_model(memory, policy_net, target_net, optimizer)
             if done:
                 episode_durations.append(t + 1)
