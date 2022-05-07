@@ -9,12 +9,12 @@ import pandas as pd
 import numpy as np
 import os
 
-graph_source = 'enwiki.wikilink_graph.2001-03-01.csv'
+graph_source = 'enwiki.wikilink_graph.2001-03-01.csv.gz'
 # 'enwiki.wikilink_graph.2018-03-01.csv.gz
 
 def create_wiki_graph():
-    df = pd.read_csv(f'gymEnv/wikiGame/envs/{graph_source}', sep='\t')
-    print(df.head())
+    df = pd.read_csv(f'gymEnv/wikiGame/envs/{graph_source}', sep='\t', header=0)
+    print(df.columns)
     all_pages = df['page_title_from'].unique()
     g = Graph()
     v_prop = g.new_vertex_property("string")
@@ -95,7 +95,6 @@ class wikiGame(gym.Env):
         init_ix, goal_ix = np.random.choice(self.n_vertices, 2, replace=False)
         self.current_vertex = self.graph.vertex(init_ix)
         self.goal_vertex = self.graph.vertex(goal_ix)
-        # print(f"current vtx: {self.ix_to_name_d[int(self.current_vertex)]},\tgoal vtx: {self.ix_to_name_d[int(self.goal_vertex)]}")
         return self.current_vertex, \
                 self.goal_vertex, \
                 self.ix_to_name_d
