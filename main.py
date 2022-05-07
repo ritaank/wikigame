@@ -44,7 +44,7 @@ if is_ipython:
 
 plt.ion()
 
-BATCH_SIZE = 16#128
+BATCH_SIZE = 2
 GAMMA = 0.999
 EPS_START = 0.9
 EPS_END = 0.05
@@ -52,7 +52,7 @@ EPS_DECAY = 200
 TARGET_UPDATE = 10
 WIKIPEDIA_DIAMETER = 70
 BUFFER_CAPACITY = 1000
-STATE_SIZE = 1024
+STATE_SIZE = 1024*3
 SEED = 6884
 FC1_UNITS = 1024
 FC2_UNITS = 256
@@ -74,35 +74,31 @@ def randomly_select_action(state):
 def get_elmo_embedding(text):
     # print(f"text {text}")
     tokenized_text = mt.tokenize(text, escape=False)
-    character_ids = batch_to_ids(tokenized_text)
+    character_ids = batch_to_ids([tokenized_text])
 
     embedding = elmo(character_ids)
-    # print(f"char ids: \n type {type(character_ids)} \n size{character_ids.size()}")
     # print(f"embeddding type {type(embedding)} \n length{len(embedding)}")
     # print(f"each tensor in embedding has dims{ embedding['elmo_representations'][0].size()}")
     # time.sleep(60)
     embedding = torch.stack(embedding['elmo_representations'], dim=0)
-    embedding = embedding.mean(dim=(0, 1))
+    embedding = embedding.view(embedding.size(-1), -1).mean(1)
     return embedding
 
 def evaluate_expected_rewards(policy_net, current_state, goal_state_embedding, vertex_to_title):
     current_state_embedding = get_elmo_embedding(vertex_to_title[int(current_state)])
     rewards = torch.zeros((sum(1 for _ in current_state.out_neighbors()), 1))
     indexes = torch.zeros((sum(1 for _ in current_state.out_neighbors()), 1))
-    # print([current_state.out_neighbors()])
-    # print("eval expect")
-    # print(rewards.size())
-    # print(indexes.size())
     for i, neighbor in enumerate(current_state.out_neighbors()):
         # print(i)
         next_state_embedding = get_elmo_embedding(vertex_to_title[int(neighbor)])
         indexes[i] = int(neighbor)
-        # print("mat sizes")
-        # print(goal_state_embedding.size())
-        # print(current_state_embedding.size())
-        # print(next_state_embedding.size())
-        x = policy_net(torch.cat((goal_state_embedding, current_state_embedding, next_state_embedding), 0))
-        rewards[i] = x.mean(dim=0).item()
+
+        current_state_embedding = torch.mean(current_state_embedding, 0)
+        next_state_embedding = torch.mean(next_state_embedding,0)
+        print("shapes", goal_state_embedding.shape, current_state_embedding.shape, next_state_embedding.shape)
+        combined_state_action = torch.cat((goal_state_embedding, current_state_embedding, next_state_embedding), dim=0).unsqueeze(0)
+        x = policy_net(combined_state_action)
+        rewards[i] = x.item()
     return rewards, indexes
 
 def select_action(policy_net, state, goal_state, goal_state_embedding, steps_done, vertex_to_title):
@@ -120,59 +116,76 @@ def select_action(policy_net, state, goal_state, goal_state_embedding, steps_don
             # print(f"maxrewardix {max_reward_ix}")
             return ix_vector[max_reward_ix]
     else:
-        print("random selection")
+        # print("random selection")
         return torch.tensor([[randomly_select_action(state)]], device=device, dtype=torch.long)
 
-def optimize_model(memory, policy_net, target_net, optimizer):
+def optimize_model(memory, policy_net, target_net, optimizer, vertex_to_title):
     if len(memory) < BATCH_SIZE:
         return
     transitions = memory.sample(BATCH_SIZE)
-    # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
-    # detailed explanation). This converts batch-array of Transitions
-    # to Transition of batch-arrays.
-    batch = Transition(*zip(*transitions))
-
-    pprint(batch.action)
-    pprint(batch.reward)
-
-    # Compute a mask of non-final states and concatenate the batch elements
-    # (a final state would've been the one after which simulation ended)
-    non_final_mask = torch.tensor(tuple( #transforms iterator to tuple, then to tensor
-                                        map(lambda s: s is not None, batch.next_state) #iterator
-                                        ),
-                                device=device,
-                                dtype=torch.bool)
-    non_final_next_states = torch.as_tensor([[int(s) for s in batch.next_state if s is not None]])
-    print(non_final_next_states.size())
-    pprint(batch.state)
-    state_batch = torch.as_tensor([[int(s) for s in batch.state if s is not None]])
-    reward_batch = torch.unsqueeze(torch.cat(batch.reward),0)
-    action_batch = torch.as_tensor([[int(s) for s in batch.action]])
-
-    print(state_batch.size())
-    print(action_batch.size())
-    print(reward_batch.size())
-    print("done")
+    print("HERE ARE TRANSITIONS", transitions)
 
 
-    # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
-    # columns of actions taken. These are the actions which would've been taken
-    # for each batch state according to policy_net
-    state_action_values = policy_net(state_batch).gather(1, action_batch)
-
-    # Compute V(s_{t+1}) for all next states.
-    # Expected values of actions for non_final_next_states are computed based
-    # on the "older" target_net; selecting their best reward with max(1)[0].
-    # This is merged based on the mask, such that we'll have either the expected
-    # state value or 0 in case the state was final.
-    next_state_values = torch.zeros(BATCH_SIZE, device=device)
-    next_state_values[non_final_mask] = target_net(non_final_next_states).max(1)[0].detach()
-    # Compute the expected Q values
-    expected_state_action_values = (next_state_values * GAMMA) + reward_batch
-
-    # Compute Huber loss
+    loss = torch.zeros((1,1))
     criterion = nn.SmoothL1Loss()
-    loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
+    for state, action, next_state, reward, goal_state_embedding in transitions:
+        print(goal_state_embedding.shape)
+        cur_reward_vector, _ = evaluate_expected_rewards(policy_net, state, goal_state_embedding, vertex_to_title)
+        expected_reward_vector, _ = evaluate_expected_rewards(target_net, next_state, goal_state_embedding, vertex_to_title)
+        
+        future_val = reward + GAMMA * expected_reward_vector.max()
+        loss += criterion(cur_reward_vector.max(), future_val)
+    print(loss)
+    raise Error
+
+    # # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
+    # # detailed explanation). This converts batch-array of Transitions
+    # # to Transition of batch-arrays.
+    # batch = Transition(*zip(*transitions))
+
+    # # pprint(batch.action)
+    # # pprint(batch.reward)
+
+    # # Compute a mask of non-final states and concatenate the batch elements
+    # # (a final state would've been the one after which simulation ended)
+    # non_final_mask = torch.tensor(tuple( #transforms iterator to tuple, then to tensor
+    #                                     map(lambda s: s is not None, batch.next_state) #iterator
+    #                                     ),
+    #                             device=device,
+    #                             dtype=torch.bool)
+    # non_final_next_states = torch.as_tensor([[int(s) for s in batch.next_state if s is not None]])
+    # print(non_final_next_states.size())
+    # pprint(batch.state)
+    # state_batch = torch.as_tensor([[int(s) for s in batch.state if s is not None]])
+    # reward_batch = torch.unsqueeze(torch.cat(batch.reward),0)
+    # action_batch = torch.as_tensor([[int(s) for s in batch.action]])
+
+    # print(state_batch.size())
+    # print(action_batch.size())
+    # print(reward_batch.size())
+    # print("done")
+
+
+    # # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
+    # # columns of actions taken. These are the actions which would've been taken
+    # # for each batch state according to policy_net
+    # network_output = policy_net(state_batch)
+    # print(network_output.shape)
+    # state_action_values = network_output.gather(1, action_batch)
+
+    # # Compute V(s_{t+1}) for all next states.
+    # # Expected values of actions for non_final_next_states are computed based
+    # # on the "older" target_net; selecting their best reward with max(1)[0].
+    # # This is merged based on the mask, such that we'll have either the expected
+    # # state value or 0 in case the state was final.
+    # next_state_values = torch.zeros(BATCH_SIZE, device=device)
+    # next_state_values[non_final_mask] = target_net(non_final_next_states).max(1)[0].detach()
+    # # Compute the expected Q values
+    # expected_state_action_values = (next_state_values * GAMMA) + reward_batch
+
+    # # Compute Huber loss
+    # criterion = nn.SmoothL1Loss()
+    # loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
 
     # Optimize the model
     optimizer.zero_grad()
@@ -189,6 +202,7 @@ def train(env, memory, policy_net, target_net, optimizer):
         # Initialize the environment and state
         state, goal_state, vertex_to_title = env.reset()
         goal_state_embedding = get_elmo_embedding(vertex_to_title[int(goal_state)])
+        goal_state_embedding = torch.mean(goal_state_embedding,dim=0)
         # print(f"goal state embedding {goal_state_embedding.size()}")
         for t in tqdm(range(WIKIPEDIA_DIAMETER)):
             # Select and perform an action
@@ -205,14 +219,14 @@ def train(env, memory, policy_net, target_net, optimizer):
                 next_state = None
 
             # Store the transition in memory
-            memory.push(state, action, next_state, reward)
+            memory.push(state, action, next_state, reward, goal_state_embedding)
 
             # Move to the next state
             state = next_state
 
             # Perform one step of the optimization (on the policy network)
-            print("about to optimize model", flush=True)
-            optimize_model(memory, policy_net, target_net, optimizer)
+            # print("about to optimize model", flush=True)
+            optimize_model(memory, policy_net, target_net, optimizer, vertex_to_title)
             if done:
                 episode_durations.append(t + 1)
                 plot_durations(episode_durations)
