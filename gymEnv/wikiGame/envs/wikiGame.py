@@ -14,7 +14,7 @@ graph_source = 'enwiki.wikilink_graph.2001-03-01.csv.gz'
 
 def create_wiki_graph():
     df = pd.read_csv(f'gymEnv/wikiGame/envs/{graph_source}', sep='\t', header=0)
-    print(df.columns)
+    df = df[df['page_id_from'] != df['page_id_to']]
     all_pages = df['page_title_from'].unique()
     g = Graph()
     v_prop = g.new_vertex_property("string")
