@@ -1,13 +1,12 @@
 import sys
-sys.path.append('/opt/homebrew/Cellar/graph-tool/2.44_1/lib/python3.9/site-packages')
+from pathlib import Path
 
 import gym
-from gym import spaces
-from pathlib import Path
-from graph_tool.all import Graph, load_graph
-import pandas as pd
 import numpy as np
-import os
+import pandas as pd
+from graph_tool.all import Graph, load_graph
+
+sys.path.append('/opt/homebrew/Cellar/graph-tool/2.44_1/lib/python3.9/site-packages')
 
 graph_source = 'enwiki.wikilink_graph.2001-03-01.csv.gz'
 # 'enwiki.wikilink_graph.2018-03-01.csv.gz
@@ -48,7 +47,7 @@ class wikiGame(gym.Env):
     """
     metadata = {'render.modes': ['human', 'graph', 'interactive']}
 
-    def __init__(self):
+    def __init__(self, fixed_dest_node=False, fixed_dest_node_ix=0):
 
         graph_file = Path("gymEnv/wikiGame/envs/wikiGraph.xml.gz")
         if graph_file.is_file():
@@ -66,9 +65,9 @@ class wikiGame(gym.Env):
             self.graph.save("gymEnv/wikiGame/envs/wikiGraph.xml.gz")
 
         self.current_vertex, self.goal_vertex = None, None
-        # print("in wikigame() init, before reset")
-
-        # self.reset()
+        self.fixed_dest_node = fixed_dest_node
+        self.fixed_dest_node_ix = fixed_dest_node_ix
+        self.reset()
 
     def render(self, mode='human'):
         if mode == 'graph':
@@ -92,7 +91,10 @@ class wikiGame(gym.Env):
         return None, reward, done, {"next_vertex": self.current_vertex} #no observations, this is an MDP not POMDP
 
     def reset(self):
-        init_ix, goal_ix = np.random.choice(self.n_vertices, 2, replace=False)
+        goal_ix = self.fixed_dest_node_ix if self.fixed_dest_node else np.random.choice(self.n_vertices, 1)
+        init_ix = np.random.choice(self.n_vertices, 1) 
+        while init_ix == goal_ix:
+            init_ix = np.random.choice(self.n_vertices, 1) 
         self.current_vertex = self.graph.vertex(init_ix)
         self.goal_vertex = self.graph.vertex(goal_ix)
         return self.current_vertex, \

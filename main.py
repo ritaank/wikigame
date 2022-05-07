@@ -3,68 +3,41 @@
 Handles the training of the Reinforcement Learning Agent for the Wiki Game
 
 TODO:
-
-- put all hyperparameters into argparse
-- glove representations for policy evaluation
-- figure out how to capture state for vectors
-
+    - fix destination node for quicker training
+    - settle on good hyperparams
+    - make sure this is runnabel on colab
 """
+import math
+import random
 import sys
-sys.setrecursionlimit(10**3)
 import warnings
-warnings.filterwarnings('ignore')
-
-import time
-
 from pprint import pprint
 
-from parse import parser
-import random
-import math
-from qnetwork import QNetwork
-
-import torch
-import torch.nn as nn
-    
-
-import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import torch.nn as nn
 from gymEnv.wikiGame.envs.wikiGame import wikiGame
+from parse import parser
+from qnetwork import QNetwork
+from replay_utils import ReplayMemory, Transition
 from tqdm import tqdm
-
-from replay_utils import Transition, ReplayMemory
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore",category=DeprecationWarning)
     from allennlp.modules.elmo import Elmo, batch_to_ids
     from sacremoses import MosesTokenizer
 
-
-
-# if gpu is to be used
+warnings.filterwarnings('ignore')
+sys.setrecursionlimit(10**3)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+plt.ion()
 
 # set up matplotlib
 is_ipython = 'inline' in matplotlib.get_backend()
 if is_ipython:
     from IPython import display
-
-plt.ion()
-
-BATCH_SIZE = 2
-GAMMA = 0.999
-EPS_START = 0.9
-EPS_END = 0.05
-EPS_DECAY = 200
-TARGET_UPDATE = 10
-WIKIPEDIA_DIAMETER = 70
-BUFFER_CAPACITY = 1000
-STATE_SIZE = 1024*3
-SEED = 6884
-FC1_UNITS = 1024
-FC2_UNITS = 256
-LR = 3e-4
 
 #tokenizer + elmo model
 mt = MosesTokenizer(lang='en')
@@ -101,9 +74,8 @@ def evaluate_expected_rewards(policy_net, current_state, goal_state_embedding, v
         rewards[i] = x
     return rewards, indexes
 
-def select_action(policy_net, state, goal_state, goal_state_embedding, steps_done, vertex_to_title):
+def select_action(policy_net, state, goal_state_embedding, eps_threshold, vertex_to_title):
     sample = random.random()
-    eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * steps_done / EPS_DECAY)
     if sample > eps_threshold:
         with torch.no_grad():
             reward_vector, ix_vector = evaluate_expected_rewards(policy_net, state, goal_state_embedding, vertex_to_title)
@@ -114,18 +86,18 @@ def select_action(policy_net, state, goal_state, goal_state_embedding, steps_don
         out = torch.tensor([randomly_select_action(state)], device=device, dtype=torch.long)
         return out
 
-def optimize_model(memory, policy_net, target_net, optimizer, vertex_to_title):
-    if len(memory) < BATCH_SIZE:
+def optimize_model(args, memory, policy_net, target_net, optimizer, vertex_to_title):
+    if len(memory) < args.batch_size:
         return
-    transitions = memory.sample(BATCH_SIZE)
+    transitions = memory.sample(args.batch_size)
 
     losses = []
     loss_fn = nn.SmoothL1Loss()
-    for state, action, next_state, reward, goal_state_embedding in transitions:
+    for state, _, next_state, reward, goal_state_embedding in transitions:
         cur_reward_vector, _ = evaluate_expected_rewards(policy_net, state, goal_state_embedding, vertex_to_title)
         expected_reward_vector, _ = evaluate_expected_rewards(target_net, next_state, goal_state_embedding, vertex_to_title)
         
-        future_val = reward + GAMMA * expected_reward_vector.max()
+        future_val = reward + args.gamma * expected_reward_vector.max()
         temporal_diff = loss_fn(cur_reward_vector.max(), future_val)
         losses.append(temporal_diff)
     loss = sum(losses)
@@ -137,7 +109,7 @@ def optimize_model(memory, policy_net, target_net, optimizer, vertex_to_title):
         param.grad.data.clamp_(-1, 1)
     optimizer.step()
 
-def train(env, memory, policy_net, target_net, optimizer):
+def train(args, env, memory, policy_net, target_net, optimizer):
     num_episodes = 50
     episode_durations = []
     steps_done = 0
@@ -145,9 +117,10 @@ def train(env, memory, policy_net, target_net, optimizer):
         # Initialize the environment and state
         state, goal_state, vertex_to_title = env.reset()
         goal_state_embedding = get_elmo_embedding(vertex_to_title[int(goal_state)])
-        for t in tqdm(range(WIKIPEDIA_DIAMETER)):
+        for t in tqdm(range(args.max_ep_length), position=0, leave=True):
             # Select and perform an action
-            action = select_action(policy_net, state, goal_state, goal_state_embedding, steps_done, vertex_to_title)
+            eps_threshold = args.eps_end + (args.eps_start - args.eps_end) * math.exp(-1. * steps_done / args.eps_decay)
+            action = select_action(policy_net, state, goal_state_embedding, eps_threshold, vertex_to_title)
 
             steps_done += 1
             _, reward, done, info_dict = env.step(action.item())
@@ -155,12 +128,8 @@ def train(env, memory, policy_net, target_net, optimizer):
 
             reward = torch.tensor([reward], device=device)
 
-            # Observe new state
-            if done:
-                next_state = None
-
             # Store the transition in memory
-            print("PUSH TO MEM", state, action, next_state, reward,)
+            #print("PUSH TO MEM", state, next_state, goal_state, reward,)
             memory.push(state, action, next_state, reward, goal_state_embedding)
 
             # Move to the next state
@@ -169,12 +138,12 @@ def train(env, memory, policy_net, target_net, optimizer):
             # Perform one step of the optimization (on the policy network)
             # print("about to optimize model", flush=True)
             optimize_model(memory, policy_net, target_net, optimizer, vertex_to_title)
-            if done:
+            if done or t == args.max_ep_length-1:
                 episode_durations.append(t + 1)
                 plot_durations(episode_durations)
                 break
         # Update the target network, copying all weights and biases in DQN
-        if i_episode % TARGET_UPDATE == 0:
+        if i_episode % args.target_update == 0:
             target_net.load_state_dict(policy_net.state_dict())
 
     print('Training Complete')
@@ -201,10 +170,10 @@ def plot_durations(episode_durations):
         display.display(plt.gcf())
 
 def main(args):
-    memory = ReplayMemory(BUFFER_CAPACITY)
-    policy_net = QNetwork(STATE_SIZE, SEED, FC1_UNITS,  FC2_UNITS)
-    target_net = QNetwork(STATE_SIZE, SEED, FC1_UNITS,  FC2_UNITS)
-    optimizer = torch.optim.Adam(policy_net.parameters(), lr=LR)
+    memory = ReplayMemory(args.buffer_capacity)
+    policy_net = QNetwork(args.state_size, args.fc1_units, args.fc2_units)
+    target_net = QNetwork(args.state_size, args.fc1_units, args.fc2_units)
+    optimizer = torch.optim.Adam(policy_net.parameters(), lr=args.lr)
     print("creating wikigame", flush=True)
     env = wikiGame()
     train(env, memory, policy_net, target_net, optimizer)
