@@ -110,10 +110,9 @@ def optimize_model(args, memory, policy_net, target_net, optimizer, vertex_to_ti
     optimizer.step()
 
 def train(args, env, memory, policy_net, target_net, optimizer):
-    num_episodes = 50
     episode_durations = []
     steps_done = 0
-    for i_episode in tqdm(range(num_episodes)):
+    for i_episode in tqdm(range(args.num_episodes)):
         # Initialize the environment and state
         state, goal_state, vertex_to_title = env.reset()
         goal_state_embedding = get_elmo_embedding(vertex_to_title[int(goal_state)])

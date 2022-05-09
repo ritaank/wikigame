@@ -4,6 +4,7 @@ parser = argparse.ArgumentParser("WALDO - Wikipedia Agent for Learning Definitio
 
 parser.add_argument("--save", type=str, default="../results/tmp")
 parser.add_argument("--max_ep_length", type=int, default=25)
+parser.add_argument("--num_episodes", type=int, default=300)
 parser.add_argument("--buffer_capacity", type=int, default=1000)
 
 #Hyperparams
