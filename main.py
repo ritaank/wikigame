@@ -108,6 +108,7 @@ def train(args, env, memory, policy_net, target_net, optimizer):
     episode_durations = []
     steps_done = 0
     for i_episode in tqdm(range(args.num_episodes)):
+        print(i_episode, args.num_episodes)
         # Initialize the environment and state
         state, goal_state = env.reset()
         goal_state_embedding = get_neural_embedding(goal_state)
