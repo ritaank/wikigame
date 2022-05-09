@@ -6,6 +6,7 @@ parser.add_argument("--save", type=str, default="../results/tmp")
 parser.add_argument("--max_ep_length", type=int, default=25)
 parser.add_argument("--num_episodes", type=int, default=300)
 parser.add_argument("--buffer_capacity", type=int, default=1000)
+parser.add_argument("--wiki_year", type=int, default=2006)
 
 #Hyperparams
 parser.add_argument("--batch_size", type=int, default=8)
@@ -24,6 +25,6 @@ parser.add_argument("--fc2_units", type=int, default=256)
 parser.add_argument("--lr", type=float, default=3e-4)
 
 #gym params
-parser.add_argument("--fixed_dest_node", type=bool, default=False)
-parser.add_argument("--fixed_dest_node_ix", type=int, default=0)
+parser.add_argument("--has_fixed_dest_node", type=bool, default=False)
+parser.add_argument("--fixed_dest_node", type=str, default="Applied Statistics")
 

@@ -24,10 +24,14 @@ from qnetwork import QNetwork
 from replay_utils import ReplayMemory, Transition
 from tqdm import tqdm
 
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore",category=DeprecationWarning)
-    from allennlp.modules.elmo import Elmo, batch_to_ids
-    from sacremoses import MosesTokenizer
+from transformers import BertTokenizer, BertModel
+
+# with warnings.catch_warnings():
+#     warnings.filterwarnings("ignore",category=DeprecationWarning)
+#     print("FUCK ME")
+#     from allennlp.modules.elmo import Elmo, batch_to_ids
+#     print("FUCK ME 2")
+#     from sacremoses import MosesTokenizer
 
 warnings.filterwarnings('ignore')
 sys.setrecursionlimit(10**3)
@@ -39,63 +43,57 @@ is_ipython = 'inline' in matplotlib.get_backend()
 if is_ipython:
     from IPython import display
 
-#tokenizer + elmo model
-mt = MosesTokenizer(lang='en')
-options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json"
-weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
-# Compute two different representation for each token.
-# Each representation is a linear weighted combination for the
-# 3 layers in ELMo (i.e., charcnn, the outputs of the two BiLSTM))
-elmo = Elmo(options_file, weight_file, 2, dropout=0)
+# #tokenizer + elmo model
+# mt = MosesTokenizer(lang='en')
+# options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json"
+# weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
+# # Compute two different representation for each token.
+# # Each representation is a linear weighted combination for the
+# # 3 layers in ELMo (i.e., charcnn, the outputs of the two BiLSTM))
+# elmo = Elmo(options_file, weight_file, 2, dropout=0)
 
-def randomly_select_action(state):
-    random_action = np.random.choice([int(neighbor) for neighbor in state.out_neighbors()], 1)
-    return random_action
 
-def get_elmo_embedding(text):
-    # print(f"text {text}")
-    tokenized_text = mt.tokenize(text, escape=False)
-    character_ids = batch_to_ids([tokenized_text])
 
-    embedding = elmo(character_ids)
-    embedding = torch.stack(embedding['elmo_representations'], dim=0)
-    embedding = embedding.view(embedding.size(-1), -1).mean(1)
-    return embedding
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+model = BertModel.from_pretrained("bert-base-uncased")
 
-def evaluate_expected_rewards(policy_net, current_state, goal_state_embedding, vertex_to_title):
-    current_state_embedding = get_elmo_embedding(vertex_to_title[int(current_state)])
-    rewards = torch.zeros((sum(1 for _ in current_state.out_neighbors()), 1))
-    indexes = torch.zeros((sum(1 for _ in current_state.out_neighbors()), 1))
-    for i, neighbor in enumerate(current_state.out_neighbors()):
-        next_state_embedding = get_elmo_embedding(vertex_to_title[int(neighbor)])
-        indexes[i] = int(neighbor)
+def get_neural_embedding(text):
+    encoded_input = tokenizer(text, return_tensors='pt')
+    output = model(**encoded_input).last_hidden_state.mean(dim=1).view(-1)
+    return output
+
+def evaluate_expected_rewards(policy_net, state, goal_state_embedding, possible_actions):
+    current_state_embedding = get_neural_embedding(state)
+    rewards = torch.zeros((len(possible_actions), 1))
+    for i, neighbor in enumerate(possible_actions):
+        next_state_embedding = get_neural_embedding(neighbor)
         combined_state_action = torch.cat((goal_state_embedding, current_state_embedding, next_state_embedding), dim=0).unsqueeze(0)
         x = policy_net(combined_state_action)
         rewards[i] = x
-    return rewards, indexes
+    return rewards
 
-def select_action(policy_net, state, goal_state_embedding, eps_threshold, vertex_to_title):
+def select_action(policy_net, state, goal_state_embedding, possible_actions, eps_threshold):
     sample = random.random()
     if sample > eps_threshold:
         with torch.no_grad():
-            reward_vector, ix_vector = evaluate_expected_rewards(policy_net, state, goal_state_embedding, vertex_to_title)
-            max_reward_ix  =  np.argmax(reward_vector, axis=0) #reward_vector.max(dim=1)['indices'].view(1,1)
-            out = ix_vector[max_reward_ix].long()
+            reward_vector = evaluate_expected_rewards(policy_net, state, goal_state_embedding, possible_actions)
+            max_reward_ix = np.argmax(reward_vector, axis=0) 
+            out = possible_actions[max_reward_ix]
             return out
     else:
-        out = torch.tensor([randomly_select_action(state)], device=device, dtype=torch.long)
+        out = np.random.choice(list(possible_actions), 1)
         return out
 
-def optimize_model(args, memory, policy_net, target_net, optimizer, vertex_to_title):
+def optimize_model(args, memory, policy_net, target_net, optimizer):
     if len(memory) < args.batch_size:
         return
     transitions = memory.sample(args.batch_size)
 
     losses = []
     loss_fn = nn.SmoothL1Loss()
-    for state, _, next_state, reward, goal_state_embedding in transitions:
-        cur_reward_vector, _ = evaluate_expected_rewards(policy_net, state, goal_state_embedding, vertex_to_title)
-        expected_reward_vector, _ = evaluate_expected_rewards(target_net, next_state, goal_state_embedding, vertex_to_title)
+    for state, cur_possible_actions, _, next_state, next_possible_actions, reward, goal_state_embedding in transitions:
+        cur_reward_vector, _ = evaluate_expected_rewards(policy_net, state, goal_state_embedding, cur_possible_actions)
+        expected_reward_vector, _ = evaluate_expected_rewards(target_net, next_state, goal_state_embedding, next_possible_actions)
         
         future_val = reward + args.gamma * expected_reward_vector.max()
         temporal_diff = loss_fn(cur_reward_vector.max(), future_val)
@@ -114,29 +112,31 @@ def train(args, env, memory, policy_net, target_net, optimizer):
     steps_done = 0
     for i_episode in tqdm(range(args.num_episodes)):
         # Initialize the environment and state
-        state, goal_state, vertex_to_title = env.reset()
-        goal_state_embedding = get_elmo_embedding(vertex_to_title[int(goal_state)])
+        state, goal_state, possible_actions = env.reset()
+        goal_state_embedding = get_neural_embedding(goal_state)
         for t in tqdm(range(args.max_ep_length), position=0, leave=True):
             # Select and perform an action
             eps_threshold = args.eps_end + (args.eps_start - args.eps_end) * math.exp(-1. * steps_done / args.eps_decay)
-            action = select_action(policy_net, state, goal_state_embedding, eps_threshold, vertex_to_title)
+            action = select_action(policy_net, state, goal_state_embedding, possible_actions, eps_threshold)
 
             steps_done += 1
-            _, reward, done, info_dict = env.step(action.item())
-            next_state = info_dict['next_vertex']
+            _, reward, done, info_dict = env.step(action)
+            possible_actions = info_dict['next_neighbors']
 
             reward = torch.tensor([reward], device=device)
 
             # Store the transition in memory
             #print("PUSH TO MEM", state, next_state, goal_state, reward,)
-            memory.push(state, action, next_state, reward, goal_state_embedding)
+            next_state = action #by virtue of deterministic observed transitions 
+            next_possible_actions = env.graph.successors(next_state)
+            memory.push(state, tuple(possible_actions), action, next_sstate, tuple(next_possible_actions), reward, goal_state_embedding)
 
             # Move to the next state
             state = next_state
 
             # Perform one step of the optimization (on the policy network)
             # print("about to optimize model", flush=True)
-            optimize_model(args, memory, policy_net, target_net, optimizer, vertex_to_title)
+            optimize_model(args, memory, policy_net, target_net, optimizer)
             if done or t == args.max_ep_length-1:
                 episode_durations.append(t + 1)
                 plot_durations(episode_durations)
@@ -174,7 +174,9 @@ def main(args):
     target_net = QNetwork(args.state_size, args.fc1_units, args.fc2_units)
     optimizer = torch.optim.Adam(policy_net.parameters(), lr=args.lr)
     print("creating wikigame", flush=True)
-    env = wikiGame()
+    env = wikiGame(has_fixed_dest_node=args.has_fixed_dest_node, 
+                    fixed_dest_node=args.fixed_dest_node, 
+                    wiki_year=args.wiki_year)
     train(args, env, memory, policy_net, target_net, optimizer)
     return
 

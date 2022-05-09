@@ -4,38 +4,13 @@ from pathlib import Path
 import gym
 import numpy as np
 import pandas as pd
-from graph_tool.all import Graph, load_graph
+import networkx as nx
 
-sys.path.append('/opt/homebrew/Cellar/graph-tool/2.44_1/lib/python3.9/site-packages')
-
-graph_source = 'enwiki.wikilink_graph.2001-03-01.csv.gz'
-# 'enwiki.wikilink_graph.2018-03-01.csv.gz
-
-def create_wiki_graph():
-    df = pd.read_csv(f'gymEnv/wikiGame/envs/{graph_source}', sep='\t', header=0)
+def create_wiki_graph(graph_source):
+    df = pd.read_csv(graph_source, sep='\t', header=0)
     df = df[df['page_id_from'] != df['page_id_to']]
-    all_pages = df['page_title_from'].unique()
-    g = Graph()
-    v_prop = g.new_vertex_property("string")
-    vertices = g.add_vertex(len(all_pages))
-    ix_to_name_d = {}
-    name_to_ix_d = {}
-    for vertex, page_name in zip(vertices, all_pages):
-        v_prop[vertex] = page_name
-        ix_to_name_d[int(vertex)] = page_name
-        name_to_ix_d[page_name] = int(vertex)
-
-    #assign properties as a dic value
-    g.vertex_properties["name"] = v_prop
-    #remap page titles to graph vertex indexes... will make adding edges significantly easier
-    
-    df["page_title_from_ix"] = df["page_title_from"].map(name_to_ix_d)
-    df["page_title_to_ix"] = df["page_title_to"].map(name_to_ix_d)
-
-    #add edges from remapped dataframe
-    g.add_edge_list(df[["page_title_from_ix", "page_title_to_ix"]].values)
-
-    return g, ix_to_name_d, name_to_ix_d, len(all_pages)
+    g = nx.from_pandas_edgelist(df, source='page_title_from', target='page_title_to', create_using=nx.DiGraph)
+    return g
 
 class wikiGame(gym.Env):
     """
@@ -47,27 +22,21 @@ class wikiGame(gym.Env):
     """
     metadata = {'render.modes': ['human', 'graph', 'interactive']}
 
-    def __init__(self, fixed_dest_node=False, fixed_dest_node_ix=0):
-
-        graph_file = Path("gymEnv/wikiGame/envs/wikiGraph.xml.gz")
+    def __init__(self, has_fixed_dest_node=False, fixed_dest_node='Statistical Theory', wiki_year=2006):
+        graph_file_txt = f"gymEnv/wikiGame/envs/wikiGraph_{wiki_year}.xml.gz"
+        graph_file = Path(graph_file_txt)
         if graph_file.is_file():
-            self.graph = load_graph("gymEnv/wikiGame/envs/wikiGraph.xml.gz")
-            self.ix_to_name_d = {}
-            self.name_to_ix_d = {}
-            v_prop = self.graph.vertex_properties["name"]
-            self.n_vertices = 0
-            for vertex in self.graph.vertices():
-                self.ix_to_name_d[int(vertex)] = v_prop[vertex]
-                self.name_to_ix_d[v_prop[vertex]] = int(vertex)
-                self.n_vertices += 1
+            self.graph = nx.read_graphml(graph_file_txt)
         else:
-            self.graph, self.ix_to_name_d, self.name_to_ix_d, self.n_vertices = create_wiki_graph()
-            self.graph.save("gymEnv/wikiGame/envs/wikiGraph.xml.gz")
+            graph_source_text = f"gymEnv/wikiGame/envs/enwiki.wikilink_graph.{wiki_year}-03-01.csv.gz"
+            self.graph = create_wiki_graph(graph_source_text)
+            nx.write_graphml(self.graph, graph_file_txt)
 
         self.current_vertex, self.goal_vertex = None, None
+        self.has_fixed_dest_node = has_fixed_dest_node
         self.fixed_dest_node = fixed_dest_node
-        self.fixed_dest_node_ix = fixed_dest_node_ix
         self.reset()
+
 
     def render(self, mode='human'):
         if mode == 'graph':
@@ -81,22 +50,19 @@ class wikiGame(gym.Env):
                         output_size=(1000, 1000), output=filename)
 
     def step(self, action):
-        # print("inside wikigame step", flush=True)
-        self.current_vertex = self.graph.vertex(action)
+        self.current_vertex = action
         done = 0
         reward = -1
         if self.goal_vertex == self.current_vertex:
             reward = 1
             done = 1
-        return None, reward, done, {"next_vertex": self.current_vertex} #no observations, this is an MDP not POMDP
+        return None, reward, done, {"next_neighbors": self.graph.successors(self.current_vertex)} #no observations, this is an MDP not POMDP
 
     def reset(self):
-        goal_ix = self.fixed_dest_node_ix if self.fixed_dest_node else np.random.choice(self.n_vertices, 1)
-        init_ix = np.random.choice(self.n_vertices, 1) 
-        while init_ix == goal_ix:
-            init_ix = np.random.choice(self.n_vertices, 1) 
-        self.current_vertex = self.graph.vertex(init_ix)
-        self.goal_vertex = self.graph.vertex(goal_ix)
+        self.goal_vertex = self.fixed_dest_node if self.has_fixed_dest_node else np.random.choice(self.graph.nodes(), 1)[0]
+        self.current_vertex = np.random.choice(self.graph.nodes(), 1)[0]
+        while self.current_vertex == self.goal_vertex:
+            self.current_vertex = np.random.choice(self.graph.nodes(), 1)[0]
         return self.current_vertex, \
                 self.goal_vertex, \
-                self.ix_to_name_d
+                self.graph.successors(self.current_vertex)
