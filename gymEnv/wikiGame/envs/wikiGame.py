@@ -5,11 +5,14 @@ import gym
 import numpy as np
 import pandas as pd
 import networkx as nx
+import pickle
 
 def create_wiki_graph(graph_source):
     df = pd.read_csv(graph_source, sep='\t', header=0)
     df = df[df['page_id_from'] != df['page_id_to']]
     g = nx.from_pandas_edgelist(df, source='page_title_from', target='page_title_to', create_using=nx.DiGraph)
+    remove = (node for node in list(g) if g.out_degree(node) == 0)
+    g.remove_nodes_from(remove)
     return g
 
 class wikiGame(gym.Env):
@@ -22,15 +25,17 @@ class wikiGame(gym.Env):
     """
     metadata = {'render.modes': ['human', 'graph', 'interactive']}
 
-    def __init__(self, has_fixed_dest_node=False, fixed_dest_node='Statistical Theory', wiki_year=2006):
-        graph_file_txt = f"gymEnv/wikiGame/envs/wikiGraph_{wiki_year}.xml.gz"
+    def __init__(self, has_fixed_dest_node=False, fixed_dest_node='Massachusetts Institute of Technology', wiki_year=2006):
+        graph_file_txt = f"gymEnv/wikiGame/envs/wikiGraph_{wiki_year}.gpickle"
         graph_file = Path(graph_file_txt)
         if graph_file.is_file():
-            self.graph = nx.read_graphml(graph_file_txt)
+            print("loading graph file")
+            self.graph = nx.read_gpickle(graph_file_txt)
         else:
+            print("creating graph file")
             graph_source_text = f"gymEnv/wikiGame/envs/enwiki.wikilink_graph.{wiki_year}-03-01.csv.gz"
             self.graph = create_wiki_graph(graph_source_text)
-            nx.write_graphml(self.graph, graph_file_txt)
+            nx.write_gpickle(self.graph, graph_file_txt)
 
         self.current_vertex, self.goal_vertex = None, None
         self.has_fixed_dest_node = has_fixed_dest_node
@@ -56,7 +61,7 @@ class wikiGame(gym.Env):
         if self.goal_vertex == self.current_vertex:
             reward = 1
             done = 1
-        return None, reward, done, {"next_neighbors": self.graph.successors(self.current_vertex)} #no observations, this is an MDP not POMDP
+        return None, reward, done, {} #no observations, this is an MDP not POMDP
 
     def reset(self):
         self.goal_vertex = self.fixed_dest_node if self.has_fixed_dest_node else np.random.choice(self.graph.nodes(), 1)[0]
@@ -64,5 +69,4 @@ class wikiGame(gym.Env):
         while self.current_vertex == self.goal_vertex:
             self.current_vertex = np.random.choice(self.graph.nodes(), 1)[0]
         return self.current_vertex, \
-                self.goal_vertex, \
-                self.graph.successors(self.current_vertex)
+                self.goal_vertex

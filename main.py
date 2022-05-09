@@ -72,7 +72,7 @@ def evaluate_expected_rewards(policy_net, state, goal_state_embedding, possible_
         rewards[i] = x
     return rewards
 
-def select_action(policy_net, state, goal_state_embedding, possible_actions, eps_threshold):
+def select_action(policy_net, state, goal_state_embedding, eps_threshold, possible_actions):
     sample = random.random()
     if sample > eps_threshold:
         with torch.no_grad():
@@ -81,23 +81,29 @@ def select_action(policy_net, state, goal_state_embedding, possible_actions, eps
             out = possible_actions[max_reward_ix]
             return out
     else:
-        out = np.random.choice(list(possible_actions), 1)
+        out = np.random.choice(list(possible_actions), 1)[0]
         return out
 
-def optimize_model(args, memory, policy_net, target_net, optimizer):
+def optimize_model(env, args, memory, policy_net, target_net, optimizer):
     if len(memory) < args.batch_size:
         return
     transitions = memory.sample(args.batch_size)
 
     losses = []
     loss_fn = nn.SmoothL1Loss()
-    for state, cur_possible_actions, _, next_state, next_possible_actions, reward, goal_state_embedding in transitions:
-        cur_reward_vector, _ = evaluate_expected_rewards(policy_net, state, goal_state_embedding, cur_possible_actions)
-        expected_reward_vector, _ = evaluate_expected_rewards(target_net, next_state, goal_state_embedding, next_possible_actions)
+    for state, _, next_state, reward, goal_state_embedding in transitions:
+        cur_possible_actions = list(env.graph.successors(state))
+        cur_reward_vector = evaluate_expected_rewards(policy_net, state, goal_state_embedding, cur_possible_actions)
+        next_possible_actions = list(env.graph.successors(next_state))
+        expected_reward_vector = evaluate_expected_rewards(target_net, next_state, goal_state_embedding, next_possible_actions)
+        try:
+            future_val = reward + args.gamma * expected_reward_vector.max()
+            temporal_diff = loss_fn(cur_reward_vector.max(), future_val)
+            losses.append(temporal_diff)
+        except:
+            print(state, type(cur_possible_actions), len(cur_possible_actions),next_state, type(next_possible_actions), len(next_possible_actions))
+            continue
         
-        future_val = reward + args.gamma * expected_reward_vector.max()
-        temporal_diff = loss_fn(cur_reward_vector.max(), future_val)
-        losses.append(temporal_diff)
     loss = sum(losses)
 
     # Optimize the model
@@ -112,31 +118,37 @@ def train(args, env, memory, policy_net, target_net, optimizer):
     steps_done = 0
     for i_episode in tqdm(range(args.num_episodes)):
         # Initialize the environment and state
-        state, goal_state, possible_actions = env.reset()
+        state, goal_state = env.reset()
         goal_state_embedding = get_neural_embedding(goal_state)
         for t in tqdm(range(args.max_ep_length), position=0, leave=True):
             # Select and perform an action
             eps_threshold = args.eps_end + (args.eps_start - args.eps_end) * math.exp(-1. * steps_done / args.eps_decay)
-            action = select_action(policy_net, state, goal_state_embedding, possible_actions, eps_threshold)
+            possible_actions = list(env.graph.successors(state))
+            
+            if sum(1 for _ in possible_actions) == 0:
+                episode_durations.append(25)
+                plot_durations(episode_durations)
+                break
+            action = select_action(policy_net, state, goal_state_embedding, eps_threshold, possible_actions)
 
             steps_done += 1
-            _, reward, done, info_dict = env.step(action)
-            possible_actions = info_dict['next_neighbors']
+            _, reward, done, _ = env.step(action)
+
+
+            next_state = action #by virtue of deterministic observed transitions 
 
             reward = torch.tensor([reward], device=device)
 
             # Store the transition in memory
-            #print("PUSH TO MEM", state, next_state, goal_state, reward,)
-            next_state = action #by virtue of deterministic observed transitions 
-            next_possible_actions = env.graph.successors(next_state)
-            memory.push(state, tuple(possible_actions), action, next_sstate, tuple(next_possible_actions), reward, goal_state_embedding)
+            
+            memory.push(state, action, next_state, reward, goal_state_embedding)
 
             # Move to the next state
             state = next_state
 
             # Perform one step of the optimization (on the policy network)
             # print("about to optimize model", flush=True)
-            optimize_model(args, memory, policy_net, target_net, optimizer)
+            optimize_model(env, args, memory, policy_net, target_net, optimizer)
             if done or t == args.max_ep_length-1:
                 episode_durations.append(t + 1)
                 plot_durations(episode_durations)
