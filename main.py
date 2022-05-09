@@ -175,7 +175,7 @@ def main(args):
     optimizer = torch.optim.Adam(policy_net.parameters(), lr=args.lr)
     print("creating wikigame", flush=True)
     env = wikiGame()
-    train(env, memory, policy_net, target_net, optimizer)
+    train(args, env, memory, policy_net, target_net, optimizer)
     return
 
 if __name__ == "__main__":
