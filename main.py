@@ -36,10 +36,11 @@ from transformers import DistilBertTokenizer, DistilBertModel
 warnings.filterwarnings('ignore')
 sys.setrecursionlimit(10**3)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-plt.ion()
+#plt.ion()
 
 # set up matplotlib
 is_ipython = 'inline' in matplotlib.get_backend()
+print("IS IPYTHON", is_ipython)
 if is_ipython:
     from IPython import display
 
