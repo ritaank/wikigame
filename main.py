@@ -83,7 +83,7 @@ def optimize_model(env, args, memory, policy_net, target_net, optimizer):
         return
     transitions = memory.sample(args.batch_size)
 
-    loss = torch.zeros(size=(1, 1))
+    loss = torch.zeros(size=(1, 1)).to(device)
     loss_fn = nn.SmoothL1Loss()
     for state, _, next_state, reward, goal_state_embedding in transitions:
         cur_possible_actions = list(env.graph.successors(state))
@@ -93,8 +93,8 @@ def optimize_model(env, args, memory, policy_net, target_net, optimizer):
         
         current_val = cur_reward_vector.max().to(device)
         future_val = reward + args.gamma * expected_reward_vector.max().to(device)
-        temporal_diff = loss_fn(current_val, future_val)
-        
+        temporal_diff = loss_fn(current_val, future_val).to(device)
+
         loss = loss + temporal_diff
     # Optimize the model
     optimizer.zero_grad()
