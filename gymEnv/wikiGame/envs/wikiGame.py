@@ -101,7 +101,7 @@ class wikiGame(gym.Env):
     def calc_bfs_dist_schedule(self):
         #first, calculate accoridng to exponential increase based on the fitting points
         k = 1 / (0 - .6 * self.max_episodes) * math.log(1/self.max_bfs_dist)
-        curr_bfs_dist = min([math.floor(math.exp(k)), self.max_bfs_dist])
+        curr_bfs_dist = min([math.floor(math.exp(k * self.num_episodes)), self.max_bfs_dist])
 
         return curr_bfs_dist
 
