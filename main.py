@@ -119,7 +119,7 @@ def train(args, env, memory, policy_net, target_net, optimizer):
             eps_threshold = args.eps_end + (args.eps_start - args.eps_end) * math.exp(-1. * steps_done / args.eps_decay)
             possible_actions = list(env.graph.successors(state))
             
-            if sum(1 for _ in possible_actions) == 0:
+            if len(possible_actions) == 0:
                 episode_durations.append(limit)
                 plot_durations(episode_durations)
                 break
@@ -143,7 +143,7 @@ def train(args, env, memory, policy_net, target_net, optimizer):
             # Perform one step of the optimization (on the policy network)
             # print("about to optimize model", flush=True)
             optimize_model(env, args, memory, policy_net, target_net, optimizer)
-            if done or t == args.max_ep_length-1:
+            if done or t >= limit-1:
                 episode_durations.append(t + 1)
                 plot_durations(episode_durations)
                 break
