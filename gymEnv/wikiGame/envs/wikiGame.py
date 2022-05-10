@@ -116,7 +116,7 @@ class wikiGame(gym.Env):
         return ret_graph
 
     def get_nodes_by_distances(self, tier_values):
-        length, _ = nx.single_source_dijkstra(self.graph, self.bfs_center_node, cutoff=max(tier_values))
+        length, _ = nx.single_source_dijkstra(self.graph, target=self.bfs_center_node, cutoff=max(tier_values))
         tiers = {}
         for key, value in length.items():
             # tiers.setdefault(value, []).extend([key])
