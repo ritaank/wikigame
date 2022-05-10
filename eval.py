@@ -198,8 +198,8 @@ def main(eval_args):
     with torch.no_grad():
         trained_net.eval()
         env = wikiGame(args)
-        nodes_by_dist = env.get_nodes_by_distances(args.tiers) #args.tiers should be a list
-        for level in args.tiers:
+        nodes_by_dist = env.get_nodes_by_distances(eval_args.dist_levels) #args.tiers should be a list
+        for level in eval_args.dist_levels:
             evaluate(trained_net, env, args, nodes_by_dist[level])
         
         env.close()
