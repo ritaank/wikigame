@@ -174,9 +174,9 @@ def evaluate(qnet, args):
         env.close()
 
 def main(eval_args):
-    print(eval_args.path)
     model_and_args = torch.load(eval_args.path)
     args = model_and_args['args']
+    args.num_tests = eval_args.num_tests
     state_dict = model_and_args['state_dict']
     print("loaded model from ", eval_args.path)
     trained_net = QNetwork(args.state_size, args.fc1_units, args.fc2_units).to(device)
