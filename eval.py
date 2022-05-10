@@ -13,7 +13,7 @@ from qnetwork import QNetwork
 from transformers import DistilBertTokenizer, DistilBertModel
 
 eval_parser = argparse.ArgumentParser("WALDO evaluation")
-eval_parser.add_argument('p','--path', type=str, help='path to trained model (.pt) file', required=True)
+eval_parser.add_argument('-p','--path', type=str, help='path to trained model (.pt) file', required=True)
 eval_parser.add_argument('--num_tests', type=int, help='how many tests to run?', default=200)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
