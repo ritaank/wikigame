@@ -174,7 +174,7 @@ def evaluate(qnet, args):
         env.close()
 
 def main(eval_args):
-    print(eval_args)
+    print(eval_args.path)
     model_and_args = torch.load(eval_args.path)
     args = model_and_args['args']
     state_dict = model_and_args['state_dict']
