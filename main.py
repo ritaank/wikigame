@@ -121,7 +121,7 @@ def train(args, env, memory, policy_net, target_net, optimizer):
             
             if len(possible_actions) == 0:
                 episode_durations.append(limit)
-                plot_durations(episode_durations)
+                plot_durations(args.plot, episode_durations)
                 break
             action = select_action(policy_net, state, goal_state_embedding, eps_threshold, possible_actions)
             # print("done selectign action")
@@ -145,7 +145,7 @@ def train(args, env, memory, policy_net, target_net, optimizer):
             optimize_model(env, args, memory, policy_net, target_net, optimizer)
             if done or t >= limit-1:
                 episode_durations.append(t + 1)
-                plot_durations(episode_durations)
+                plot_durations(args.plot, episode_durations)
                 break
         # Update the target network, copying all weights and biases in DQN
         if i_episode % args.target_update == 0:
@@ -166,7 +166,9 @@ def train(args, env, memory, policy_net, target_net, optimizer):
     # model.load_state_dict(torch.load(filepath))
     # model.eval()
 
-def plot_durations(episode_durations):
+def plot_durations(plotting, episode_durations):
+    if not plotting:
+        return
     plt.figure(2)
     plt.clf()
     durations_t = torch.tensor(episode_durations, dtype=torch.float)

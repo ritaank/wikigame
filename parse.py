@@ -7,6 +7,7 @@ parser.add_argument("--max_ep_length", type=int, default=12)
 parser.add_argument("--num_episodes", type=int, default=300)
 parser.add_argument("--buffer_capacity", type=int, default=10000)
 parser.add_argument("--wiki_year", type=int, default=2006)
+parser.add_argument("--plot_training", type=int, default=False)
 
 #Hyperparams
 parser.add_argument("--batch_size", type=int, default=8)
