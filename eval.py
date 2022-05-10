@@ -15,7 +15,7 @@ from transformers import DistilBertTokenizer, DistilBertModel
 eval_parser = argparse.ArgumentParser("WALDO evaluation")
 eval_parser.add_argument('-p','--path', type=str, help='path to trained model (.pt) file', required=True)
 eval_parser.add_argument('--num_tests', type=int, help='how many tests to run?', default=5)
-eval_parser.add_argument('--dist_levels', type=list, help='what levels to run tests at', default=[3])
+eval_parser.add_argument('--dist_levels', type=list, help='what levels to run tests at', default=[2])
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # PATH = '/content/wikigame/models/2006_fixednode-True_2022_05_10-12_07_38_PM.pt'
