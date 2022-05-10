@@ -12,6 +12,7 @@ import random
 import sys
 import warnings
 import time
+import datetime
 from pprint import pprint
 
 import matplotlib
@@ -39,7 +40,7 @@ if is_ipython:
     from IPython import display
 
 tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
-model = DistilBertModel.from_pretrained("distilbert-base-uncased")
+model = DistilBertModel.from_pretrained("distilbert-base-uncased").cuda()
 for param in model.parameters():
     param.requires_grad = False
 
@@ -130,7 +131,7 @@ def train(args, env, memory, policy_net, target_net, optimizer):
             reward = torch.tensor([reward], device=device)
 
             # Store the transition in memory
-            
+
             memory.push(state, action, next_state, reward, goal_state_embedding.detach())
 
             # Move to the next state
@@ -148,8 +149,19 @@ def train(args, env, memory, policy_net, target_net, optimizer):
             target_net.load_state_dict(policy_net.state_dict())
 
     print('Training Complete')
-    env.render()
+    # env.render()
+
+    save_dict = {'state_dict': target_net.state_dict(), 'args': args}
+    dest_path = f"models/{args.wiki_year}_fixednode-{args.has_fixed_dest_node}_{datetime.datetime.now().strftime('%Y_%m_%d-%I:%M:%S_%p')}.pt"
+    torch.save(save_dict, dest_path)
+    print('Model saved to location ', dest_path)
+
     env.close()
+    # torch.save(model.state_dict(), filepath)
+
+    # #Later to restore:
+    # model.load_state_dict(torch.load(filepath))
+    # model.eval()
 
 def plot_durations(episode_durations):
     plt.figure(2)
