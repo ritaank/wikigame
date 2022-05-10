@@ -1,1 +1,3 @@
-We store our models here with torch storing the state dict and the args used to run the model
+We store our models here with torch saving a dictionary with keys 'state_dict' and 'args'
+state_dict contains model.state_dict()
+args contains the model hyperparameters
