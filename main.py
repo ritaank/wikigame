@@ -90,8 +90,11 @@ def optimize_model(env, args, memory, policy_net, target_net, optimizer):
         cur_reward_vector = evaluate_expected_rewards(policy_net, state, goal_state_embedding, cur_possible_actions)
         next_possible_actions = list(env.graph.successors(next_state))
         expected_reward_vector = evaluate_expected_rewards(target_net, next_state, goal_state_embedding, next_possible_actions)
-        future_val = reward + args.gamma * expected_reward_vector.max()
-        temporal_diff = loss_fn(cur_reward_vector.max(), future_val)
+        
+        current_val = cur_reward_vector.max().to(device)
+        future_val = reward + args.gamma * expected_reward_vector.max().to(device)
+        temporal_diff = loss_fn(current_val, future_val)
+        
         loss = loss + temporal_diff
     # Optimize the model
     optimizer.zero_grad()
