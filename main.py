@@ -28,13 +28,6 @@ from tqdm import tqdm
 
 from transformers import DistilBertTokenizer, DistilBertModel
 
-# with warnings.catch_warnings():
-#     warnings.filterwarnings("ignore",category=DeprecationWarning)
-#     print("FUCK ME")
-#     from allennlp.modules.elmo import Elmo, batch_to_ids
-#     print("FUCK ME 2")
-#     from sacremoses import MosesTokenizer
-
 warnings.filterwarnings('ignore')
 sys.setrecursionlimit(10**3)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -90,15 +83,18 @@ def optimize_model(env, args, memory, policy_net, target_net, optimizer):
         return
     transitions = memory.sample(args.batch_size)
 
-    loss = torch.zeros(size=(1, 1))
+    loss = torch.zeros(size=(1, 1)).to(device)
     loss_fn = nn.SmoothL1Loss()
     for state, _, next_state, reward, goal_state_embedding in transitions:
         cur_possible_actions = list(env.graph.successors(state))
         cur_reward_vector = evaluate_expected_rewards(policy_net, state, goal_state_embedding, cur_possible_actions)
         next_possible_actions = list(env.graph.successors(next_state))
         expected_reward_vector = evaluate_expected_rewards(target_net, next_state, goal_state_embedding, next_possible_actions)
-        future_val = reward + args.gamma * expected_reward_vector.max()
-        temporal_diff = loss_fn(cur_reward_vector.max(), future_val)
+        
+        current_val = cur_reward_vector.max().to(device)
+        future_val = reward + args.gamma * expected_reward_vector.max().to(device)
+        temporal_diff = loss_fn(current_val, future_val).to(device)
+
         loss = loss + temporal_diff
     # Optimize the model
     optimizer.zero_grad()
