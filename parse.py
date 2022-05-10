@@ -14,7 +14,7 @@ parser.add_argument("--batch_size", type=int, default=16)
 parser.add_argument("--gamma", type=float, default=.999)
 parser.add_argument("--eps_start", type=float, default=.9)
 parser.add_argument("--eps_end", type=float, default=.05)
-parser.add_argument("--eps_decay", type=int, default=50)
+parser.add_argument("--eps_decay", type=int, default=200)
 parser.add_argument("--target_update", type=int, default=10)
 
 #QNetwork Params
@@ -28,5 +28,6 @@ parser.add_argument("--lr", type=float, default=3e-4)
 #gym params
 parser.add_argument("--has_fixed_dest_node", type=bool, default=False)
 parser.add_argument("--bfs_center_node", type=str, default="Massachusetts Institute of Technology") #Massachusetts Institute of Technology
-parser.add_argument("--toy_example_bfs_dist", type=int, default=-1)
+parser.add_argument("--max_bfs_dist", type=int, default=-1)
+parser.add_argument("--expanding_bfs", type=bool, default=False)
 

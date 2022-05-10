@@ -30,8 +30,7 @@ from transformers import DistilBertTokenizer, DistilBertModel
 
 warnings.filterwarnings('ignore')
 sys.setrecursionlimit(10**3)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("WE ARE ON DEVICE", device)
+
 #plt.ion()
 
 # set up matplotlib
@@ -41,8 +40,13 @@ if is_ipython:
 
 tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
 model = DistilBertModel.from_pretrained("distilbert-base-uncased")
-if device == "cuda":
+
+if torch.cuda.is_available():
+    device = torch.device("cuda")
     model = model.cuda()
+else:
+    device = torch.device("cpu")
+
 for param in model.parameters():
     param.requires_grad = False
 
@@ -112,8 +116,8 @@ def train(args, env, memory, policy_net, target_net, optimizer):
         # Initialize the environment and state
         state, goal_state = env.reset()
         goal_state_embedding = get_neural_embedding(goal_state)
-        if args.toy_example_bfs_dist > 0:
-            limit = 4*args.toy_example_bfs_dist
+        if args.max_bfs_dist > 0:
+            limit = 4*args.max_bfs_dist
         else:
             limit = args.max_ep_length
         for t in tqdm(range(limit), position=0, leave=True):

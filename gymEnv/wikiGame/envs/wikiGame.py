@@ -1,3 +1,4 @@
+import math
 import sys
 from pathlib import Path
 
@@ -39,15 +40,22 @@ class wikiGame(gym.Env):
             nx.write_gpickle(self.graph, graph_file_txt)
 
         self.current_vertex, self.goal_vertex = None, None
+
+        #DEAL WITH FIXED DESTINATION AND MAX BFS DIST
         self.has_fixed_dest_node = args.has_fixed_dest_node
         self.bfs_center_node = args.bfs_center_node
-        if args.toy_example_bfs_dist > 0: #if we put a bfs dist, we want to build graph from some center node
+        self.max_bfs_dist = args.max_bfs_dist
+        if self.max_bfs_dist > 0: #if we put a bfs dist, we want to build graph from some center node
             print("OLD GRAPH SIZE", len(self.graph.nodes()))
-            path = nx.single_target_shortest_path(self.graph, target=self.bfs_center_node, cutoff=args.toy_example_bfs_dist)
-            desired_nodes = [k for k,_ in path.items()]
-            self.graph = self.graph.subgraph(desired_nodes)
-            print(f"NEW GRAPH SIZE (all within distance {args.toy_example_bfs_dist} of {self.bfs_center_node}", len(self.graph.nodes()))
-
+            self.graph = self.trim_graph(graph=self.graph, target=self.bfs_center_node, cutoff=self.max_bfs_dist)
+            print(f"NEW GRAPH SIZE (all within distance {self.max_bfs_dist} of {self.bfs_center_node})", len(self.graph.nodes()))
+        
+        # DEAL WITH EXPANDING BFS PROGRESSIVE SPECTRAL DEMASKING 
+        self.expanding_bfs = args.expanding_bfs
+        self.num_episodes = 0
+        self.max_episodes = args.num_episodes
+        self.full_graph = self.graph
+        self.last_trim_call_params = None
         self.reset()
 
 
@@ -72,10 +80,60 @@ class wikiGame(gym.Env):
             done = 1
         return None, reward, done, {} #no observations, this is an MDP not POMDP
 
-    def reset(self):
+    def reset(self, evalMode=False, node=None):
         self.goal_vertex = self.bfs_center_node if self.has_fixed_dest_node else np.random.choice(self.graph.nodes(), 1)[0]
-        self.current_vertex = np.random.choice(self.graph.nodes(), 1)[0]
-        while self.current_vertex == self.goal_vertex:
+        if self.expanding_bfs and not evalMode:
+            curr_bfs_dist =  self.calc_bfs_dist_schedule()
+            if curr_bfs_dist == self.max_bfs_dist:#WE ALREADY REACHED FULL SIZE, DONT BOTHER RECALCULATING
+                pass
+            elif self.last_trim_call_params != (self.goal_vertex, curr_bfs_dist): #IF NEW GOAL OR NEW DiSTANCE, RETRIM
+                self.graph = self.trim_graph(self.full_graph, self.goal_vertex, curr_bfs_dist)
+                self.last_trim_call_params = (self.goal_vertex, curr_bfs_dist)
+
+        # here, we get a random neighbor who is 'tier' distance away from the dest node
+        if evalMode and self.has_fixed_dest_node and node:
+            self.current_vertex = node
+        else:
             self.current_vertex = np.random.choice(self.graph.nodes(), 1)[0]
+            while self.current_vertex == self.goal_vertex:
+                self.current_vertex = np.random.choice(self.graph.nodes(), 1)[0]
+
+        self.num_episodes += 1
         return self.current_vertex, \
                 self.goal_vertex
+
+    def calc_bfs_dist_schedule(self):
+        #first, calculate accoridng to exponential increase based on the fitting points
+        k = 1 / (0 - .6 * self.max_episodes) * math.log(1/self.max_bfs_dist)
+        curr_bfs_dist = min([math.floor(math.exp(k * self.num_episodes)), self.max_bfs_dist])
+
+        return curr_bfs_dist
+
+    def trim_graph(self, graph, target, cutoff):
+        path = nx.single_target_shortest_path(graph, target=target, cutoff=cutoff)
+        desired_nodes = [k for k in path]
+        ret_graph = graph.subgraph(desired_nodes)
+        return ret_graph
+
+    def get_nodes_by_distances(self, tier_values):
+        lengths = nx.single_target_shortest_path_length(self.graph, self.bfs_center_node, cutoff=max(tier_values))
+        tiers = {}
+        for key, value in lengths:
+            # tiers.setdefault(value, []).extend([key])
+            if value in tiers and value in tier_values:
+                tiers[value].append(key)
+            else:
+                tiers[value]=[key]
+        
+        unwanted = set(tiers) - set(tier_values)
+        for unwanted_key in unwanted:
+            del tiers[unwanted_key]
+        
+        print("keysleft", tiers.keys())
+        test_key = list(tiers)[0]
+        print(f"for key {test_key}, we have a possible val {tiers[test_key][0]}")
+        print("we verify the best path between these is ")
+        print(nx.shortest_path(self.graph, source=tiers[test_key][0], target=self.bfs_center_node, weight=None, method='dijkstra'))
+
+        return tiers
+
