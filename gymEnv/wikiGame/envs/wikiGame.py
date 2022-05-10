@@ -125,7 +125,7 @@ class wikiGame(gym.Env):
             else:
                 tiers[value]=[key]
         
-        unwanted = set(tier_values) - set(tiers)
+        unwanted = set(tiers) - set(tier_values)
         for unwanted_key in unwanted:
             del tiers[unwanted_key]
         

@@ -91,7 +91,7 @@ def evaluate(qnet, env, args, potential_start_nodes):
             # print(f"i {i}")
 
             source = np.random.choice(potential_start_nodes, 1)[0]
-            state, goal_state = env.reset(evalmode=True, node=source)
+            state, goal_state = env.reset(evalMode=True, node=source)
             path_taken = [state]
             # print(f"starting at {state} and going to {goal_state}")
 
