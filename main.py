@@ -37,6 +37,7 @@ from transformers import DistilBertTokenizer, DistilBertModel
 warnings.filterwarnings('ignore')
 sys.setrecursionlimit(10**3)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("WE ARE ON DEVICE", device)
 #plt.ion()
 
 # set up matplotlib
@@ -44,21 +45,21 @@ is_ipython = 'inline' in matplotlib.get_backend()
 if is_ipython:
     from IPython import display
 
-
-
-
 tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
 model = DistilBertModel.from_pretrained("distilbert-base-uncased")
+for param in model.parameters():
+    param.requires_grad = False
+
 cached = {}
 
 def get_neural_embedding(text):
     if text in cached:
         output = cached[text]
     else:
-        t = time.time()
-        encoded_input = tokenizer(text, return_tensors='pt').to(device)
-        output = model(**encoded_input).last_hidden_state.mean(dim=1).view(-1).to(device)
-        cached[text] = output
+        with torch.no_grad():
+            encoded_input = tokenizer(text, return_tensors='pt').to(device)
+            output = model(**encoded_input).last_hidden_state.mean(dim=1).view(-1).to(device)
+            cached[text] = output
     return output
 
 def evaluate_expected_rewards(policy_net, state, goal_state_embedding, possible_actions):
@@ -90,7 +91,6 @@ def optimize_model(env, args, memory, policy_net, target_net, optimizer):
 
     loss = torch.zeros(size=(1, 1))
     loss_fn = nn.SmoothL1Loss()
-    t = time.time()
     for state, _, next_state, reward, goal_state_embedding in transitions:
         cur_possible_actions = list(env.graph.successors(state))
         cur_reward_vector = evaluate_expected_rewards(policy_net, state, goal_state_embedding, cur_possible_actions)
@@ -99,12 +99,9 @@ def optimize_model(env, args, memory, policy_net, target_net, optimizer):
         future_val = reward + args.gamma * expected_reward_vector.max()
         temporal_diff = loss_fn(cur_reward_vector.max(), future_val)
         loss = loss + temporal_diff
-    print("time for forward", round(time.time()-t, 3))
     # Optimize the model
     optimizer.zero_grad()
-    t = time.time()
-    loss.backward(retain_graph=True)
-    print("time for backwards", round(time.time()-t, 3))
+    loss.backward(retain_graph=False)
     for param in policy_net.parameters():
         param.grad.data.clamp_(-1, 1)
     optimizer.step()
@@ -116,13 +113,17 @@ def train(args, env, memory, policy_net, target_net, optimizer):
         # Initialize the environment and state
         state, goal_state = env.reset()
         goal_state_embedding = get_neural_embedding(goal_state)
-        for t in tqdm(range(args.max_ep_length), position=0, leave=True):
+        if args.toy_example_bfs_dist > 0:
+            limit = 2*args.toy_example_bfs_dist
+        else:
+            limit = args.max_ep_length
+        for t in tqdm(range(limit), position=0, leave=True):
             # Select and perform an action
             eps_threshold = args.eps_end + (args.eps_start - args.eps_end) * math.exp(-1. * steps_done / args.eps_decay)
             possible_actions = list(env.graph.successors(state))
             
             if sum(1 for _ in possible_actions) == 0:
-                episode_durations.append(args.max_ep_length)
+                episode_durations.append(limit)
                 plot_durations(episode_durations)
                 break
             action = select_action(policy_net, state, goal_state_embedding, eps_threshold, possible_actions)
@@ -137,7 +138,7 @@ def train(args, env, memory, policy_net, target_net, optimizer):
 
             # Store the transition in memory
             
-            memory.push(state, action, next_state, reward, goal_state_embedding)
+            memory.push(state, action, next_state, reward, goal_state_embedding.detach())
 
             # Move to the next state
             state = next_state

@@ -10,6 +10,7 @@ import pickle
 def create_wiki_graph(graph_source):
     df = pd.read_csv(graph_source, sep='\t', header=0)
     df = df[df['page_id_from'] != df['page_id_to']]
+    df = df.dropna()
     g = nx.from_pandas_edgelist(df, source='page_title_from', target='page_title_to', create_using=nx.DiGraph)
     remove = (node for node in list(g) if g.out_degree(node) == 0)
     g.remove_nodes_from(remove)
@@ -33,7 +34,7 @@ class wikiGame(gym.Env):
             self.graph = nx.read_gpickle(graph_file_txt)
         else:
             print("creating graph file")
-            graph_source_text = f"gymEnv/wikiGame/envs/enwiki.wikilink_graph.{wiki_year}-03-01.csv.gz"
+            graph_source_text = f"gymEnv/wikiGame/envs/enwiki.wikilink_graph.{args.wiki_year}-03-01.csv.gz"
             self.graph = create_wiki_graph(graph_source_text)
             nx.write_gpickle(self.graph, graph_file_txt)
 
@@ -43,9 +44,9 @@ class wikiGame(gym.Env):
         if self.has_fixed_dest_node and args.toy_example_bfs_dist > 0:
             print("OLD GRAPH SIZE", len(self.graph.nodes()))
             path = nx.single_target_shortest_path(self.graph, target=self.fixed_dest_node, cutoff=args.toy_example_bfs_dist)
-            desired_nodes = [k for k,v in path.items()]
+            desired_nodes = [k for k,_ in path.items()]
             self.graph = self.graph.subgraph(desired_nodes)
-            print("NEW GRAPH SIZE", len(self.graph.nodes()))
+            print(f"NEW GRAPH SIZE (all within distance {args.toy_example_bfs_dist} of {self.fixed_dest_node}", len(self.graph.nodes()))
 
         self.reset()
 
