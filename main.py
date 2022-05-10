@@ -46,8 +46,8 @@ is_ipython = 'inline' in matplotlib.get_backend()
 if is_ipython:
     from IPython import display
 
-tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
-model = DistilBertModel.from_pretrained("distilbert-base-uncased")
+tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased').cuda()
+model = DistilBertModel.from_pretrained("distilbert-base-uncased").cuda()
 for param in model.parameters():
     param.requires_grad = False
 
