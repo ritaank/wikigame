@@ -40,13 +40,13 @@ class wikiGame(gym.Env):
 
         self.current_vertex, self.goal_vertex = None, None
         self.has_fixed_dest_node = args.has_fixed_dest_node
-        self.fixed_dest_node = args.fixed_dest_node
-        if self.has_fixed_dest_node and args.toy_example_bfs_dist > 0:
+        self.bfs_center_node = args.bfs_center_node
+        if args.toy_example_bfs_dist > 0: #if we put a bfs dist, we want to build graph from some center node
             print("OLD GRAPH SIZE", len(self.graph.nodes()))
-            path = nx.single_target_shortest_path(self.graph, target=self.fixed_dest_node, cutoff=args.toy_example_bfs_dist)
+            path = nx.single_target_shortest_path(self.graph, target=self.bfs_center_node, cutoff=args.toy_example_bfs_dist)
             desired_nodes = [k for k,_ in path.items()]
             self.graph = self.graph.subgraph(desired_nodes)
-            print(f"NEW GRAPH SIZE (all within distance {args.toy_example_bfs_dist} of {self.fixed_dest_node}", len(self.graph.nodes()))
+            print(f"NEW GRAPH SIZE (all within distance {args.toy_example_bfs_dist} of {self.bfs_center_node}", len(self.graph.nodes()))
 
         self.reset()
 
@@ -73,7 +73,7 @@ class wikiGame(gym.Env):
         return None, reward, done, {} #no observations, this is an MDP not POMDP
 
     def reset(self):
-        self.goal_vertex = self.fixed_dest_node if self.has_fixed_dest_node else np.random.choice(self.graph.nodes(), 1)[0]
+        self.goal_vertex = self.bfs_center_node if self.has_fixed_dest_node else np.random.choice(self.graph.nodes(), 1)[0]
         self.current_vertex = np.random.choice(self.graph.nodes(), 1)[0]
         while self.current_vertex == self.goal_vertex:
             self.current_vertex = np.random.choice(self.graph.nodes(), 1)[0]
