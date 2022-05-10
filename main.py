@@ -111,7 +111,7 @@ def train(args, env, memory, policy_net, target_net, optimizer):
         state, goal_state = env.reset()
         goal_state_embedding = get_neural_embedding(goal_state)
         if args.toy_example_bfs_dist > 0:
-            limit = 2*args.toy_example_bfs_dist
+            limit = 4*args.toy_example_bfs_dist
         else:
             limit = args.max_ep_length
         for t in tqdm(range(limit), position=0, leave=True):

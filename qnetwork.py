@@ -16,7 +16,6 @@ class QNetwork(nn.Module):
             fc1_unit (int): Number of nodes in first hidden layer
             fc2_unit (int): Number of nodes in second hidden layer
         """
-        # print("in: qnetwork.py", flush=True)
         super(QNetwork,self).__init__()
         self.fc1 = nn.Linear(state_size, fc1_units)
         self.fc2 = nn.Linear(fc1_units, fc2_units)
