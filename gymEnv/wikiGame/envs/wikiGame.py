@@ -58,9 +58,10 @@ class wikiGame(gym.Env):
         elif mode == 'interactive':
             interactive_window(self.graph)
         elif mode == 'human':
-            filename = "./renders/render" + str(self.time_step) + ".png"
-            graph_draw(self.graph, vertex_text=self.graph.vertex_index, vertex_font_size=18,
-                        output_size=(1000, 1000), output=filename)
+            # filename = "./renders/render" + str(self.time_step) + ".png"
+            # graph_draw(self.graph, vertex_text=self.graph.vertex_index, vertex_font_size=18,
+            #             output_size=(1000, 1000), output=filename)
+            nx.draw(self.graph)
 
     def step(self, action):
         self.current_vertex = action
