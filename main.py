@@ -143,7 +143,7 @@ def train(args, env, memory, policy_net, target_net, optimizer):
             # Perform one step of the optimization (on the policy network)
             # print("about to optimize model", flush=True)
             optimize_model(env, args, memory, policy_net, target_net, optimizer)
-            if done or t >= limit-1:
+            if done or t > limit-1:
                 episode_durations.append(t + 1)
                 plot_durations(args.plot, episode_durations)
                 break
