@@ -89,14 +89,16 @@ def evaluate(qnet, args):
         env = wikiGame(args)
         wins = fails = reached_sink = 0
 
-        for i in tqdm(range(args.num_tests)):
+
+        for _ in tqdm(range(args.num_tests)):
             # print(f"i {i}")
 
             state, goal_state = env.reset()
+            path_taken = [state]
             # print(f"starting at {state} and going to {goal_state}")
 
             best_path_list = nx.shortest_path(env.graph, source=state, target=goal_state, weight=None, method='dijkstra')
-            # print("best", best_path_list)
+            print("best", best_path_list)
             best_len = len(best_path_list)
 
             goal_state_embedding = get_neural_embedding(goal_state)
@@ -108,13 +110,13 @@ def evaluate(qnet, args):
                 limit = 2*args.max_bfs_dist #what should this multiplier be?
             else:
                 limit = args.max_ep_length
-            
+
             # loop over limit number of steps to find the dest
             for t in range(limit+1):
 
                 # Select and perform an action
                 possible_actions = list(env.graph.successors(state))
-                
+
                 if (len(possible_actions) == 0):
                     # we lose this game
                     # print("losing")
@@ -125,6 +127,8 @@ def evaluate(qnet, args):
 
                     cos_sim = cosine_similarity(get_neural_embedding(state).cpu().unsqueeze(0), eval_goal_state_embedding)
                     cos_sims.append(cos_sim - initial_cos_sim)
+
+                    print(path_taken, "\n")
 
                     fails +=1
                     reached_sink += 1
@@ -142,11 +146,14 @@ def evaluate(qnet, args):
                     distance_ratios.append(0/best_len)
                     cos_sims.append(1 - initial_cos_sim)
 
+                    print(path_taken, "\n")
+
                     wins +=1
                     break
 
                 # print(f"going to state {action}")
                 state = action
+                path_taken.append(state)
 
                 if t > limit-1:
                     # we out of steps, lose the game
@@ -157,6 +164,8 @@ def evaluate(qnet, args):
 
                     cos_sim = cosine_similarity(get_neural_embedding(state).cpu().unsqueeze(0), eval_goal_state_embedding)
                     cos_sims.append(cos_sim - initial_cos_sim)
+
+                    print(path_taken, "\n")
 
                     fails +=1
                     break
