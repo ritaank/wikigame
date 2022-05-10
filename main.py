@@ -27,13 +27,6 @@ from tqdm import tqdm
 
 from transformers import DistilBertTokenizer, DistilBertModel
 
-# with warnings.catch_warnings():
-#     warnings.filterwarnings("ignore",category=DeprecationWarning)
-#     print("FUCK ME")
-#     from allennlp.modules.elmo import Elmo, batch_to_ids
-#     print("FUCK ME 2")
-#     from sacremoses import MosesTokenizer
-
 warnings.filterwarnings('ignore')
 sys.setrecursionlimit(10**3)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
