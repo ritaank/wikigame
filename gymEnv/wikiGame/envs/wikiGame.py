@@ -95,8 +95,8 @@ class wikiGame(gym.Env):
             self.current_vertex = node
         else:
             self.current_vertex = np.random.choice(self.graph.nodes(), 1)[0]
-        while self.current_vertex == self.goal_vertex:
-            self.current_vertex = np.random.choice(self.graph.nodes(), 1)[0]
+            while self.current_vertex == self.goal_vertex:
+                self.current_vertex = np.random.choice(self.graph.nodes(), 1)[0]
 
         self.num_episodes += 1
         return self.current_vertex, \
@@ -116,7 +116,7 @@ class wikiGame(gym.Env):
         return ret_graph
 
     def get_nodes_by_distances(self, tier_values):
-        length, _ = nx.single_source_dijkstra(self.graph, self.bfs_center_node)
+        length, _ = nx.single_source_dijkstra(self.graph, self.bfs_center_node, cutoff=max(tier_values))
         tiers = {}
         for key, value in length.items():
             # tiers.setdefault(value, []).extend([key])

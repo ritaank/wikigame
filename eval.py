@@ -14,8 +14,8 @@ from transformers import DistilBertTokenizer, DistilBertModel
 
 eval_parser = argparse.ArgumentParser("WALDO evaluation")
 eval_parser.add_argument('-p','--path', type=str, help='path to trained model (.pt) file', required=True)
-eval_parser.add_argument('--num_tests', type=int, help='how many tests to run?', default=200)
-eval_parser.add_argument('--dist_levels', type=list, help='what levels to run tests at', default=[2])
+eval_parser.add_argument('--num_tests', type=int, help='how many tests to run?', default=5)
+eval_parser.add_argument('--dist_levels', type=list, help='what levels to run tests at', default=[3])
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # PATH = '/content/wikigame/models/2006_fixednode-True_2022_05_10-12_07_38_PM.pt'
@@ -91,6 +91,7 @@ def evaluate(qnet, env, args, potential_start_nodes):
             # print(f"i {i}")
 
             source = np.random.choice(potential_start_nodes, 1)[0]
+            print("our source is ", source)
             state, goal_state = env.reset(evalMode=True, node=source)
             path_taken = [state]
             # print(f"starting at {state} and going to {goal_state}")
