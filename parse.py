@@ -27,4 +27,5 @@ parser.add_argument("--lr", type=float, default=3e-4)
 #gym params
 parser.add_argument("--has_fixed_dest_node", type=bool, default=False)
 parser.add_argument("--fixed_dest_node", type=str, default="Jesus")
+parser.add_argument("--toy_example_bfs_dist", type=int, default=-1)
 

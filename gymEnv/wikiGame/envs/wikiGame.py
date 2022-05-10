@@ -25,8 +25,8 @@ class wikiGame(gym.Env):
     """
     metadata = {'render.modes': ['human', 'graph', 'interactive']}
 
-    def __init__(self, has_fixed_dest_node=False, fixed_dest_node='Massachusetts Institute of Technology', wiki_year=2006):
-        graph_file_txt = f"gymEnv/wikiGame/envs/wikiGraph_{wiki_year}.gpickle"
+    def __init__(self, args):
+        graph_file_txt = f"gymEnv/wikiGame/envs/wikiGraph_{args.wiki_year}.gpickle"
         graph_file = Path(graph_file_txt)
         if graph_file.is_file():
             print("loading graph file")
@@ -38,8 +38,15 @@ class wikiGame(gym.Env):
             nx.write_gpickle(self.graph, graph_file_txt)
 
         self.current_vertex, self.goal_vertex = None, None
-        self.has_fixed_dest_node = has_fixed_dest_node
-        self.fixed_dest_node = fixed_dest_node
+        self.has_fixed_dest_node = args.has_fixed_dest_node
+        self.fixed_dest_node = args.fixed_dest_node
+        if self.has_fixed_dest_node and args.toy_example_bfs_dist > 0:
+            print("OLD GRAPH SIZE", len(self.graph.nodes()))
+            path = nx.single_target_shortest_path(self.graph, target=self.fixed_dest_node, cutoff=args.toy_example_bfs_dist)
+            desired_nodes = [k for k,v in path.items()]
+            self.graph = self.graph.subgraph(desired_nodes)
+            print("NEW GRAPH SIZE", len(self.graph.nodes()))
+
         self.reset()
 
 

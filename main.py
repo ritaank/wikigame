@@ -11,6 +11,7 @@ import math
 import random
 import sys
 import warnings
+import time
 from pprint import pprint
 
 import matplotlib
@@ -40,7 +41,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # set up matplotlib
 is_ipython = 'inline' in matplotlib.get_backend()
-print("IS IPYTHON", is_ipython)
 if is_ipython:
     from IPython import display
 
@@ -55,6 +55,7 @@ def get_neural_embedding(text):
     if text in cached:
         output = cached[text]
     else:
+        t = time.time()
         encoded_input = tokenizer(text, return_tensors='pt').to(device)
         output = model(**encoded_input).last_hidden_state.mean(dim=1).view(-1).to(device)
         cached[text] = output
@@ -89,6 +90,7 @@ def optimize_model(env, args, memory, policy_net, target_net, optimizer):
 
     loss = torch.zeros(size=(1, 1))
     loss_fn = nn.SmoothL1Loss()
+    t = time.time()
     for state, _, next_state, reward, goal_state_embedding in transitions:
         cur_possible_actions = list(env.graph.successors(state))
         cur_reward_vector = evaluate_expected_rewards(policy_net, state, goal_state_embedding, cur_possible_actions)
@@ -97,10 +99,12 @@ def optimize_model(env, args, memory, policy_net, target_net, optimizer):
         future_val = reward + args.gamma * expected_reward_vector.max()
         temporal_diff = loss_fn(cur_reward_vector.max(), future_val)
         loss = loss + temporal_diff
-
+    print("time for forward", round(time.time()-t, 3))
     # Optimize the model
     optimizer.zero_grad()
+    t = time.time()
     loss.backward(retain_graph=True)
+    print("time for backwards", round(time.time()-t, 3))
     for param in policy_net.parameters():
         param.grad.data.clamp_(-1, 1)
     optimizer.step()
@@ -109,7 +113,6 @@ def train(args, env, memory, policy_net, target_net, optimizer):
     episode_durations = []
     steps_done = 0
     for i_episode in tqdm(range(args.num_episodes)):
-        print(i_episode, args.num_episodes)
         # Initialize the environment and state
         state, goal_state = env.reset()
         goal_state_embedding = get_neural_embedding(goal_state)
@@ -179,9 +182,7 @@ def main(args):
     target_net = QNetwork(args.state_size, args.fc1_units, args.fc2_units).to(device)
     optimizer = torch.optim.Adam(policy_net.parameters(), lr=args.lr)
     print("creating wikigame", flush=True)
-    env = wikiGame(has_fixed_dest_node=args.has_fixed_dest_node, 
-                    fixed_dest_node=args.fixed_dest_node, 
-                    wiki_year=args.wiki_year)
+    env = wikiGame(args)
     train(args, env, memory, policy_net, target_net, optimizer)
     return
 
