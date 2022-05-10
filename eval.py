@@ -105,7 +105,7 @@ def evaluate(qnet, args):
             initial_cos_sim = cosine_similarity(curr_state_embedding.unsqueeze(0), eval_goal_state_embedding)
 
             if args.max_bfs_dist > 0:
-                limit = 2*args.toy_example_bfs_dist #what should this multiplier be?
+                limit = 2*args.max_bfs_dist #what should this multiplier be?
             else:
                 limit = args.max_ep_length
             
