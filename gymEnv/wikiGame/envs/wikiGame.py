@@ -118,9 +118,9 @@ class wikiGame(gym.Env):
     def get_nodes_by_distances(self, tier_values):
         lengths = nx.single_target_shortest_path_length(self.graph, self.bfs_center_node, cutoff=max(tier_values))
         tiers = {}
-        for key, value in lengths.items():
+        for key, value in lengths:
             # tiers.setdefault(value, []).extend([key])
-            if value in tiers:
+            if value in tiers and value in tier_values:
                 tiers[value].append(key)
             else:
                 tiers[value]=[key]
