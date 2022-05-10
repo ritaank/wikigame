@@ -165,9 +165,9 @@ def evaluate(qnet, args):
         print("settings\t", args)
         print("success rate:\t", wins/args.num_tests)
         print("rate we reached a dead end:\t", reached_sink/args.num_tests)
-        print("distance ratios, lower is better:\n", distance_ratios)
+        # print("distance ratios, lower is better:\n", distance_ratios)
         print("average distance ratio:\t",sum(distance_ratios)/len(distance_ratios))
-        print("cos sims, higher is better:\n", cos_sims)
+        # print("cos sims, higher is better:\n", cos_sims)
         print("avg improvement in cos sim:\t",sum(cos_sims)/len(cos_sims))
         # plot_durations(episode_durations)
 
