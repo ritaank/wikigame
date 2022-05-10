@@ -15,6 +15,7 @@ from transformers import DistilBertTokenizer, DistilBertModel
 eval_parser = argparse.ArgumentParser("WALDO evaluation")
 eval_parser.add_argument('-p','--path', type=str, help='path to trained model (.pt) file', required=True)
 eval_parser.add_argument('--num_tests', type=int, help='how many tests to run?', default=200)
+eval_parser.add_argument('--dist_levels', type=list, help='what levels to run tests at', default=[2])
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # PATH = '/content/wikigame/models/2006_fixednode-True_2022_05_10-12_07_38_PM.pt'
@@ -76,10 +77,7 @@ def plot_durations(episode_durations):
         display.clear_output(wait=True)
         display.display(plt.gcf())
 
-def evaluate(qnet, args):
-
-    qnet.eval()
-    with torch.no_grad():
+def evaluate(qnet, env, args, potential_start_nodes):
 
         episode_durations = []
         distance_ratios = []
@@ -89,11 +87,11 @@ def evaluate(qnet, args):
         env = wikiGame(args)
         wins = fails = reached_sink = 0
 
-
         for _ in tqdm(range(args.num_tests)):
             # print(f"i {i}")
 
-            state, goal_state = env.reset()
+            source = np.random.choice(potential_start_nodes, 1)[0]
+            state, goal_state = env.reset(evalmode=True, node=source)
             path_taken = [state]
             # print(f"starting at {state} and going to {goal_state}")
 
@@ -146,7 +144,7 @@ def evaluate(qnet, args):
                     distance_ratios.append(0/best_len)
                     cos_sims.append(1 - initial_cos_sim)
 
-                    print(path_taken, "\n")
+                    print(path_taken + [goal_state], "\n")
 
                     wins +=1
                     break
@@ -180,7 +178,6 @@ def evaluate(qnet, args):
         print("avg improvement in cos sim:\t",sum(cos_sims)/len(cos_sims))
         # plot_durations(episode_durations)
 
-        env.close()
 
 def main(eval_args):
     model_and_args = torch.load(eval_args.path)
@@ -195,9 +192,17 @@ def main(eval_args):
         args.bfs_center_node = args.fixed_dest_node
     except:
         pass
+
     print(args)
 
-    evaluate(trained_net, args)
+    with torch.no_grad():
+        trained_net.eval()
+        env = wikiGame(args)
+        nodes_by_dist = env.get_nodes_by_distances(args.tiers) #args.tiers should be a list
+        for level in args.tiers:
+            evaluate(trained_net, env, args, nodes_by_dist[level])
+        
+        env.close()
 
 if __name__ == "__main__":
     eval_args = eval_parser.parse_args()

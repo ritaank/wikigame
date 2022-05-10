@@ -80,20 +80,24 @@ class wikiGame(gym.Env):
             done = 1
         return None, reward, done, {} #no observations, this is an MDP not POMDP
 
-    def reset(self):
+    def reset(self, evalMode=False, node=None):
         self.goal_vertex = self.bfs_center_node if self.has_fixed_dest_node else np.random.choice(self.graph.nodes(), 1)[0]
-        if self.expanding_bfs:
+        if self.expanding_bfs and not evalMode:
             curr_bfs_dist =  self.calc_bfs_dist_schedule()
             if curr_bfs_dist == self.max_bfs_dist:#WE ALREADY REACHED FULL SIZE, DONT BOTHER RECALCULATING
-                pass 
+                pass
             elif self.last_trim_call_params != (self.goal_vertex, curr_bfs_dist): #IF NEW GOAL OR NEW DiSTANCE, RETRIM
                 self.graph = self.trim_graph(self.full_graph, self.goal_vertex, curr_bfs_dist)
                 self.last_trim_call_params = (self.goal_vertex, curr_bfs_dist)
 
-        self.current_vertex = np.random.choice(self.graph.nodes(), 1)[0]
+        # here, we get a random neighbor who is 'tier' distance away from the dest node
+        if evalMode and self.has_fixed_dest_node and node:
+            self.current_vertex = node
+        else:
+            self.current_vertex = np.random.choice(self.graph.nodes(), 1)[0]
         while self.current_vertex == self.goal_vertex:
             self.current_vertex = np.random.choice(self.graph.nodes(), 1)[0]
-        
+
         self.num_episodes += 1
         return self.current_vertex, \
                 self.goal_vertex
@@ -110,3 +114,21 @@ class wikiGame(gym.Env):
         desired_nodes = [k for k in path]
         ret_graph = graph.subgraph(desired_nodes)
         return ret_graph
+
+    def get_nodes_by_distances(self, tier_values):
+        length, path = nx.single_source_dijkstra(self.graph, self.bfs_center_node)
+        tiers = {}
+        for key, value in length.items():
+            # tiers.setdefault(value, []).extend([key])
+            if value in tiers:
+                tiers[value].append(key)
+            else:
+                tiers[value]=[key]
+        
+        unwanted = set(tier_values) - set(tiers)
+        for unwanted_key in unwanted:
+            del tiers[unwanted_key]
+        
+        print("keysleft", tiers.keys())
+        return tiers
+
