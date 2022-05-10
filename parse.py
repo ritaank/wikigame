@@ -5,11 +5,11 @@ parser = argparse.ArgumentParser("WALDO - Wikipedia Agent for Learning Definitio
 parser.add_argument("--save", type=str, default="../results/tmp")
 parser.add_argument("--max_ep_length", type=int, default=12)
 parser.add_argument("--num_episodes", type=int, default=300)
-parser.add_argument("--buffer_capacity", type=int, default=10000)
+parser.add_argument("--buffer_capacity", type=int, default=1000)
 parser.add_argument("--wiki_year", type=int, default=2006)
 
 #Hyperparams
-parser.add_argument("--batch_size", type=int, default=8)
+parser.add_argument("--batch_size", type=int, default=16)
 parser.add_argument("--gamma", type=float, default=.999)
 parser.add_argument("--eps_start", type=float, default=.9)
 parser.add_argument("--eps_end", type=float, default=.05)
