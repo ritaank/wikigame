@@ -130,5 +130,10 @@ class wikiGame(gym.Env):
             del tiers[unwanted_key]
         
         print("keysleft", tiers.keys())
+        test_key = tiers.keys()[0]
+        print(f"for key {test_key}, we have a possible val {tiers[test_key][0]}")
+        print("we verify the best path between these is ")
+        print(nx.shortest_path(self.graph, source=tiers[test_key][0], target=self.bfs_center_node, weight=None, method='dijkstra'))
+
         return tiers
 
