@@ -20,6 +20,8 @@
 *.tar
 *.zip
 *.csv
+*.gpickle
+*.graphml
 
 # Logs and databases #
 ######################
