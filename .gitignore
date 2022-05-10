@@ -19,16 +19,24 @@
 *.rar
 *.tar
 *.zip
-*.csv
-*.gpickle
-*.graphml
-*.dat
 
 # Logs and databases #
 ######################
 *.log
 *.sql
 *.sqlite
+*.csv
+*.gpickle
+*.graphml
+
+# Models #
+######################
+*.pt
+
+# Temporary Files #
+######################
+*.pyc
+*.dat
 
 # OS generated files #
 ######################
