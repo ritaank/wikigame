@@ -56,7 +56,7 @@ class wikiGame(gym.Env):
         self.max_episodes = args.num_episodes
         self.full_graph = self.graph
         self.last_trim_call_params = None
-        self.reset()
+        # self.reset(evalMode=True)
 
 
     def render(self, mode='human'):
@@ -83,6 +83,7 @@ class wikiGame(gym.Env):
     def reset(self, evalMode=False, node=None):
         self.goal_vertex = self.bfs_center_node if self.has_fixed_dest_node else np.random.choice(self.graph.nodes(), 1)[0]
         if self.expanding_bfs and not evalMode:
+            print("graph is expanding")
             curr_bfs_dist =  self.calc_bfs_dist_schedule()
             if curr_bfs_dist == self.max_bfs_dist:#WE ALREADY REACHED FULL SIZE, DONT BOTHER RECALCULATING
                 pass
@@ -115,15 +116,32 @@ class wikiGame(gym.Env):
         ret_graph = graph.subgraph(desired_nodes)
         return ret_graph
 
-    def get_nodes_by_distances(self, tier_values):
-        lengths = nx.single_target_shortest_path_length(self.graph, self.bfs_center_node, cutoff=max(tier_values))
+    def get_nodes_by_distances(self, tier_values): #[2]
+        lengths = dict(nx.single_target_shortest_path_length(self.graph, self.bfs_center_node, cutoff=max(tier_values)+1))
         tiers = {}
-        for key, value in lengths:
+        print("start")
+
+        # print(list(lengths))
+        # # print(type(tier_values))
+        # lengths = list(lengths)
+        # print(type(lengths))
+        # print("lengths again", lengths)
+        # print(len(lengths))
+        # print(lengths[0])
+        for key,value in lengths.items():
+                # print("hello there")
+            # print("inside")
+            # print(tup, type(tup))
+            # key,value = tup[0], tup[1]
             # tiers.setdefault(value, []).extend([key])
-            if value in tiers and value in tier_values:
-                tiers[value].append(key)
-            else:
-                tiers[value]=[key]
+            # print(key, value)
+            # print(tier_values)
+            # print('bye')
+            if value in tier_values:
+                if value in tiers:
+                    tiers[value].append(key)
+                else:
+                    tiers[value]=[key]
         
         # unwanted = set(tiers) - set(tier_values)
         # for unwanted_key in unwanted:
@@ -135,5 +153,8 @@ class wikiGame(gym.Env):
         print("we verify the best path between these is ")
         print(nx.shortest_path(self.graph, source=tiers[test_key][0], target=self.bfs_center_node, weight=None, method='dijkstra'))
 
+        print("stats")
+        for level, amt in tiers.items():
+            print("level ", level, "nodecount ", len(amt))
         return tiers
 

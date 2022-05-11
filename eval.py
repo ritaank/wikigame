@@ -14,8 +14,8 @@ from transformers import DistilBertTokenizer, DistilBertModel
 
 eval_parser = argparse.ArgumentParser("WALDO evaluation")
 eval_parser.add_argument('-p','--path', type=str, help='path to trained model (.pt) file', required=True)
-eval_parser.add_argument('--num_tests', type=int, help='how many tests to run?', default=5)
-eval_parser.add_argument('--dist_levels', type=list, help='what levels to run tests at', default=[2])
+eval_parser.add_argument('--num_tests', type=int, help='how many tests to run?', default=201)
+eval_parser.add_argument('--dist_levels', type=list, help='what levels to run tests at', default=[1,2,3,4])
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # PATH = '/content/wikigame/models/2006_fixednode-True_2022_05_10-12_07_38_PM.pt'
@@ -77,27 +77,26 @@ def plot_durations(episode_durations):
         display.clear_output(wait=True)
         display.display(plt.gcf())
 
-def evaluate(qnet, env, args, potential_start_nodes):
+def evaluate(qnet, env, args, potential_start_nodes, level):
 
         episode_durations = []
         distance_ratios = []
         cos_sims = []
 
         steps_done = 0
-        env = wikiGame(args)
         wins = fails = reached_sink = 0
 
         for _ in tqdm(range(args.num_tests)):
             # print(f"i {i}")
 
             source = np.random.choice(potential_start_nodes, 1)[0]
-            print("our source is ", source)
+            # print("our source is ", source)
             state, goal_state = env.reset(evalMode=True, node=source)
             path_taken = [state]
             # print(f"starting at {state} and going to {goal_state}")
 
             best_path_list = nx.shortest_path(env.graph, source=state, target=goal_state, weight=None, method='dijkstra')
-            print("best", best_path_list)
+            # print("best", best_path_list)
             best_len = len(best_path_list)
 
             goal_state_embedding = get_neural_embedding(goal_state)
@@ -127,7 +126,7 @@ def evaluate(qnet, env, args, potential_start_nodes):
                     cos_sim = cosine_similarity(get_neural_embedding(state).cpu().unsqueeze(0), eval_goal_state_embedding)
                     cos_sims.append(cos_sim - initial_cos_sim)
 
-                    print(path_taken, "\n")
+                    # print(path_taken, "\n")
 
                     fails +=1
                     reached_sink += 1
@@ -145,7 +144,7 @@ def evaluate(qnet, env, args, potential_start_nodes):
                     distance_ratios.append(0/best_len)
                     cos_sims.append(1 - initial_cos_sim)
 
-                    print(path_taken + [goal_state], "\n")
+                    # print(path_taken + [goal_state], "\n")
 
                     wins +=1
                     break
@@ -164,12 +163,13 @@ def evaluate(qnet, env, args, potential_start_nodes):
                     cos_sim = cosine_similarity(get_neural_embedding(state).cpu().unsqueeze(0), eval_goal_state_embedding)
                     cos_sims.append(cos_sim - initial_cos_sim)
 
-                    print(path_taken, "\n")
+                    # print(path_taken, "\n")
 
                     fails +=1
                     break
 
         assert wins + fails == args.num_tests, f"w:{wins} and f:{fails} big bug"
+        print("FOR LEVEL", level)
         print("settings\t", args)
         print("success rate:\t", wins/args.num_tests)
         print("rate we reached a dead end:\t", reached_sink/args.num_tests)
@@ -177,6 +177,7 @@ def evaluate(qnet, env, args, potential_start_nodes):
         print("average distance ratio:\t",sum(distance_ratios)/len(distance_ratios))
         # print("cos sims, higher is better:\n", cos_sims)
         print("avg improvement in cos sim:\t",sum(cos_sims)/len(cos_sims))
+        print("-----------------------")
         # plot_durations(episode_durations)
 
 
@@ -199,9 +200,13 @@ def main(eval_args):
     with torch.no_grad():
         trained_net.eval()
         env = wikiGame(args)
+        print(eval_args.dist_levels, type(eval_args.dist_levels), "MEEP")
         nodes_by_dist = env.get_nodes_by_distances(eval_args.dist_levels) #args.tiers should be a list
         for level in eval_args.dist_levels:
-            evaluate(trained_net, env, args, nodes_by_dist[level])
+            if len(nodes_by_dist[level]) == 0:
+                print("skipping level, no nodes, for level: ", level)
+            else:
+                evaluate(trained_net, env, args, nodes_by_dist[level], level)
         
         env.close()
 
